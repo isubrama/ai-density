@@ -192,10 +192,10 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
           </div>
         ) : (
           messages.map((msg) => (
-            <div key={msg.id} className="flex flex-col gap-2">
+            <React.Fragment key={msg.id}>
               {/* Prompt Panel */}
               {msg.role === 'user' && (
-                <div className="sticky top-0 z-10 bg-zinc-100 border border-zinc-200 rounded-lg p-3 text-xs text-zinc-700 font-medium">
+                <div className="sticky top-0 z-20 bg-zinc-100 border border-zinc-200 rounded-lg p-3 text-xs text-zinc-700 font-medium shadow-sm">
                   {msg.content}
                 </div>
               )}
@@ -223,7 +223,7 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
                   )}
                 </div>
               )}
-            </div>
+            </React.Fragment>
           ))
         )}
         {isGenerating && (
