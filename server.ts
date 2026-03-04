@@ -24,11 +24,14 @@ async function startServer() {
     console.log(`Status check for instance ${req.params.id}`);
     try {
       const url = getLlamaUrl(req.params.id);
+      console.log(`Fetching health from: ${url}/health`);
       const response = await fetch(`${url}/health`);
       if (!response.ok) {
         throw new Error(`llama.cpp API error: ${response.statusText}`);
       }
-      const data = await response.json();
+      const text = await response.text();
+      console.log(`Response from ${url}/health: ${text.substring(0, 100)}`);
+      const data = JSON.parse(text);
       res.json({ status: data.status === "ok" ? "online" : "offline", details: data });
     } catch (error: any) {
       console.log(`Status check failed for ${req.params.id}: ${error.message}`);

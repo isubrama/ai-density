@@ -133,7 +133,7 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
       setCurrentPromptIndex(prev => (prev + 1) % PROMPTS.length);
 
       if (autoRunRef.current) {
-        timeoutId = setTimeout(runCycle, 5000); // Wait 5s before next prompt
+        timeoutId = setTimeout(runCycle, 15000); // Wait 15s before next prompt
       }
     };
 
