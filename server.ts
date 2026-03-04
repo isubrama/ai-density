@@ -1,5 +1,10 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function startServer() {
   const app = express();
@@ -7,12 +12,15 @@ async function startServer() {
 
   app.use(express.json());
 
+  console.log("Server starting...");
+
   const getLlamaUrl = (id: string) => {
     const envVar = `LLAMA_API_URL_${id}`;
     return process.env[envVar] || `http://localhost:808${parseInt(id) - 1}`;
   };
 
   app.get("/api/status/:id", async (req, res) => {
+    console.log(`Status check for instance ${req.params.id}`);
     try {
       const url = getLlamaUrl(req.params.id);
       const response = await fetch(`${url}/health`);
@@ -22,11 +30,13 @@ async function startServer() {
       const data = await response.json();
       res.json({ status: data.status === "ok" ? "online" : "offline", details: data });
     } catch (error: any) {
+      console.log(`Status check failed for ${req.params.id}: ${error.message}`);
       res.json({ status: "offline", error: error.message });
     }
   });
 
   app.post("/api/chat/:id", async (req, res) => {
+    console.log(`Chat request for instance ${req.params.id}`);
     try {
       const url = getLlamaUrl(req.params.id);
       const { prompt } = req.body;
@@ -47,18 +57,35 @@ async function startServer() {
       const data = await response.json();
       res.json(data);
     } catch (error: any) {
+      console.log(`Chat request failed for ${req.params.id}: ${error.message}`);
       res.status(500).json({ error: error.message });
     }
   });
 
   if (process.env.NODE_ENV !== "production") {
+    console.log("Setting up Vite middleware...");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
+    
+    // Explicitly serve index.html for development
+    app.use("*", async (req, res, next) => {
+      try {
+        const template = await vite.transformIndexHtml(req.originalUrl, await fs.promises.readFile(path.resolve(__dirname, "index.html"), "utf-8"));
+        res.status(200).set({ "Content-Type": "text/html" }).end(template);
+      } catch (e: any) {
+        vite.ssrFixStacktrace(e);
+        next(e);
+      }
+    });
   } else {
+    console.log("Serving static files from dist...");
     app.use(express.static("dist"));
+    app.get("*", (req, res) => {
+      res.sendFile(path.resolve(__dirname, "dist", "index.html"));
+    });
   }
 
   app.listen(PORT, "0.0.0.0", () => {
