@@ -1,13 +1,36 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bot, User, Play, Square, Activity, Cpu, Server, Zap, Clock } from 'lucide-react';
 
-const PROMPTS = [
-  "Explain the theory of relativity in simple terms.",
-  "Write a short poem about a robot learning to love.",
-  "What are the main differences between classical and quantum computing?",
-  "Describe a futuristic city powered entirely by renewable energy.",
-  "How does a large language model work?"
-];
+const PROMPTS_PER_INSTANCE: Record<number, string[]> = {
+  1: [
+    "Explain the theory of relativity in simple terms.",
+    "What is the speed of light?",
+    "How does gravity work?",
+    "What is a black hole?",
+    "Explain time dilation."
+  ],
+  2: [
+    "Write a short poem about a robot learning to love.",
+    "Write a haiku about technology.",
+    "Write a story about a futuristic city.",
+    "Describe a world without internet.",
+    "Write a dialogue between two AI."
+  ],
+  3: [
+    "What are the main differences between classical and quantum computing?",
+    "What is a qubit?",
+    "Explain quantum entanglement.",
+    "How does quantum computing change cryptography?",
+    "What is the future of quantum computing?"
+  ],
+  4: [
+    "Describe a futuristic city powered entirely by renewable energy.",
+    "How can we achieve carbon neutrality?",
+    "What are the benefits of solar energy?",
+    "Explain the importance of wind energy.",
+    "How does a smart grid work?"
+  ]
+};
 
 interface Message {
   id: string;
@@ -21,9 +44,8 @@ interface Message {
   };
 }
 
-function ChatbotInstance({ id, name }: { id: number, name: string }) {
+function ChatbotInstance({ id, name, isAutoRunning, toggleAutoRun }: { id: number, name: string, isAutoRunning: boolean, toggleAutoRun: () => void }) {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [isAutoRunning, setIsAutoRunning] = useState(false);
   const [status, setStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   const [currentPromptIndex, setCurrentPromptIndex] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -33,6 +55,7 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
     requestsCompleted: 0
   });
 
+  const prompts = PROMPTS_PER_INSTANCE[id] || [];
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const autoRunRef = useRef(isAutoRunning);
 
@@ -115,7 +138,8 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
         role: 'assistant', 
         content: `Error connecting to llama.cpp instance ${id}. Make sure it is running.` 
       }]);
-      setIsAutoRunning(false);
+      // Stop auto-run on error
+      toggleAutoRun();
     } finally {
       setIsGenerating(false);
     }
@@ -127,13 +151,23 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
     const runCycle = async () => {
       if (!autoRunRef.current || isGenerating) return;
 
-      const prompt = PROMPTS[currentPromptIndex];
+      if (currentPromptIndex >= prompts.length) {
+        // Stop auto-run when finished
+        if (autoRunRef.current) toggleAutoRun();
+        return;
+      }
+
+      const prompt = prompts[currentPromptIndex];
       await generateResponse(prompt);
       
-      setCurrentPromptIndex(prev => (prev + 1) % PROMPTS.length);
+      const nextIndex = currentPromptIndex + 1;
+      setCurrentPromptIndex(nextIndex);
 
-      if (autoRunRef.current) {
+      if (autoRunRef.current && nextIndex < prompts.length) {
         timeoutId = setTimeout(runCycle, 15000); // Wait 15s before next prompt
+      } else {
+        // Stop auto-run when finished
+        if (autoRunRef.current) toggleAutoRun();
       }
     };
 
@@ -142,11 +176,7 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
     }
 
     return () => clearTimeout(timeoutId);
-  }, [isAutoRunning, isGenerating, currentPromptIndex]);
-
-  const toggleAutoRun = () => {
-    setIsAutoRunning(!isAutoRunning);
-  };
+  }, [isAutoRunning, isGenerating, currentPromptIndex, prompts, toggleAutoRun]);
 
   return (
     <div className="bg-white border border-zinc-200 rounded-xl shadow-sm flex flex-col h-[600px] overflow-hidden">
@@ -239,22 +269,69 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
 }
 
 export default function App() {
+  const [autoRunStates, setAutoRunStates] = useState<Record<number, boolean>>({
+    1: false,
+    2: false,
+    3: false,
+    4: false
+  });
+
+  const toggleAutoRun = (id: number) => {
+    setAutoRunStates(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const runAll = () => {
+    setAutoRunStates({
+      1: true,
+      2: true,
+      3: true,
+      4: true
+    });
+  };
+
+  const stopAll = () => {
+    setAutoRunStates({
+      1: false,
+      2: false,
+      3: false,
+      4: false
+    });
+  };
+
+  const isAnyRunning = Object.values(autoRunStates).some(state => state);
+
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900 font-sans p-4 md:p-6">
       <div className="max-w-[1600px] mx-auto">
-        <div className="flex items-center gap-3 mb-8">
-          <Cpu className="w-8 h-8 text-zinc-900" />
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Ampere Density Cluster</h1>
-            <p className="text-zinc-500 text-sm">4x Independent Qwen3-8B-GGUF Instances</p>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <Cpu className="w-8 h-8 text-zinc-900" />
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Ampere Density Cluster</h1>
+              <p className="text-zinc-500 text-sm">4x Independent Qwen3-8B-GGUF Instances</p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={runAll}
+              className="px-4 py-2 bg-zinc-900 text-white rounded-lg text-sm font-medium hover:bg-zinc-800 transition-colors"
+            >
+              Run All
+            </button>
+            <button
+              onClick={stopAll}
+              className="px-4 py-2 bg-zinc-200 text-zinc-900 rounded-lg text-sm font-medium hover:bg-zinc-300 transition-colors"
+            >
+              Stop All
+            </button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
-          <ChatbotInstance id={1} name="Instance 1 (Port 8080)" />
-          <ChatbotInstance id={2} name="Instance 2 (Port 8081)" />
-          <ChatbotInstance id={3} name="Instance 3 (Port 8082)" />
-          <ChatbotInstance id={4} name="Instance 4 (Port 8083)" />
+          <ChatbotInstance id={1} name="Instance 1 (Port 8080)" isAutoRunning={autoRunStates[1]} toggleAutoRun={() => toggleAutoRun(1)} />
+          <ChatbotInstance id={2} name="Instance 2 (Port 8081)" isAutoRunning={autoRunStates[2]} toggleAutoRun={() => toggleAutoRun(2)} />
+          <ChatbotInstance id={3} name="Instance 3 (Port 8082)" isAutoRunning={autoRunStates[3]} toggleAutoRun={() => toggleAutoRun(3)} />
+          <ChatbotInstance id={4} name="Instance 4 (Port 8083)" isAutoRunning={autoRunStates[4]} toggleAutoRun={() => toggleAutoRun(4)} />
         </div>
       </div>
     </div>
