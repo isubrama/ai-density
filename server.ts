@@ -13,6 +13,7 @@ async function startServer() {
   app.use(express.json());
 
   console.log("Server starting...");
+  console.log("NODE_ENV:", process.env.NODE_ENV);
 
   const getLlamaUrl = (id: string) => {
     const envVar = `LLAMA_API_URL_${id}`;
@@ -69,17 +70,6 @@ async function startServer() {
       appType: "spa",
     });
     app.use(vite.middlewares);
-    
-    // Explicitly serve index.html for development
-    app.use("*", async (req, res, next) => {
-      try {
-        const template = await vite.transformIndexHtml(req.originalUrl, await fs.promises.readFile(path.resolve(__dirname, "index.html"), "utf-8"));
-        res.status(200).set({ "Content-Type": "text/html" }).end(template);
-      } catch (e: any) {
-        vite.ssrFixStacktrace(e);
-        next(e);
-      }
-    });
   } else {
     console.log("Serving static files from dist...");
     app.use(express.static("dist"));
