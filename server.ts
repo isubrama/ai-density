@@ -49,7 +49,7 @@ async function startServer() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: `<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n${prompt}<|im_end|>\n<|im_start|>assistant\n`,
-          n_predict: 512,
+          n_predict: 256,
           stream: true
         })
       });
