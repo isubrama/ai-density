@@ -50,7 +50,7 @@ async function startServer() {
         body: JSON.stringify({
           prompt: `<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n${prompt}<|im_end|>\n<|im_start|>assistant\n`,
           n_predict: 512,
-          stream: false
+          stream: true
         })
       });
 
@@ -58,8 +58,21 @@ async function startServer() {
         throw new Error(`llama.cpp API error: ${response.statusText}`);
       }
 
-      const data = await response.json();
-      res.json(data);
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
+      if (response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          res.write(chunk);
+        }
+      }
+      res.end();
     } catch (error: any) {
       console.log(`Chat request failed for ${req.params.id}: ${error.message}`);
       res.status(500).json({ error: error.message });
