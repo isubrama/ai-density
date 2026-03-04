@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - LLAMA_API_URL_1=http://llama-cpp-1:8080
+      - LLAMA_API_URL_2=http://llama-cpp-2:8080
+      - LLAMA_API_URL_3=http://llama-cpp-3:8080
+      - LLAMA_API_URL_4=http://llama-cpp-4:8080
+      - NODE_ENV=production
+    depends_on:
+      - llama-cpp-1
+      - llama-cpp-2
+      - llama-cpp-3
+      - llama-cpp-4
+
+  llama-cpp-1:
+    image: ghcr.io/ggerganov/llama.cpp:server
+    ports:
+      - "8080:8080"
+    command: >
+      --hf-repo Qwen/Qwen3-8B-GGUF
+      --hf-file *q4_k_m.gguf
+      --port 8080
+      --host 0.0.0.0
+      -c 2048
+
+  llama-cpp-2:
+    image: ghcr.io/ggerganov/llama.cpp:server
+    ports:
+      - "8081:8080"
+    command: >
+      --hf-repo Qwen/Qwen3-8B-GGUF
+      --hf-file *q4_k_m.gguf
+      --port 8080
+      --host 0.0.0.0
+      -c 2048
+
+  llama-cpp-3:
+    image: ghcr.io/ggerganov/llama.cpp:server
+    ports:
+      - "8082:8080"
+    command: >
+      --hf-repo Qwen/Qwen3-8B-GGUF
+      --hf-file *q4_k_m.gguf
+      --port 8080
+      --host 0.0.0.0
+      -c 2048
+
+  llama-cpp-4:
+    image: ghcr.io/ggerganov/llama.cpp:server
+    ports:
+      - "8083:8080"
+    command: >
+      --hf-repo Qwen/Qwen3-8B-GGUF
+      --hf-file *q4_k_m.gguf
+      --port 8080
+      --host 0.0.0.0
+      -c 2048

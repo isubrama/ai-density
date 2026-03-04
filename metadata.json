@@ -1,0 +1,5 @@
+{
+  "name": "Ampere LLM Density Dashboard",
+  "description": "A web app showcasing LLM inference density on Ampere CPUs using Ollama.",
+  "requestFramePermissions": []
+}
