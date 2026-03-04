@@ -149,32 +149,32 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
   };
 
   return (
-    <div className="bg-[#141414] border border-white/10 rounded-2xl flex flex-col h-[600px] overflow-hidden">
+    <div className="bg-white border border-zinc-200 rounded-xl shadow-sm flex flex-col h-[600px] overflow-hidden">
       {/* Header */}
-      <div className="p-4 border-b border-white/10 bg-[#1a1a1a] flex items-center justify-between">
+      <div className="p-4 border-b border-zinc-100 bg-zinc-50 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Server className="w-5 h-5 text-emerald-400" />
+          <Server className="w-5 h-5 text-zinc-500" />
           <div>
-            <h2 className="font-medium text-sm">{name}</h2>
+            <h2 className="font-semibold text-sm text-zinc-900">{name}</h2>
             <div className="flex items-center gap-2 mt-1">
               <div className={`w-2 h-2 rounded-full ${status === 'online' ? 'bg-emerald-500' : status === 'checking' ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
-              <span className="text-[10px] uppercase tracking-wider font-mono text-gray-400">{status}</span>
+              <span className="text-[10px] uppercase tracking-wider font-mono text-zinc-500">{status}</span>
             </div>
           </div>
         </div>
         
         <div className="flex items-center gap-3">
           <div className="text-right hidden sm:block">
-            <div className="text-[10px] text-gray-500 uppercase tracking-wider">Avg Speed</div>
-            <div className="text-xs font-mono text-emerald-400">{metrics.avgTokensPerSecond.toFixed(1)} t/s</div>
+            <div className="text-[10px] text-zinc-400 uppercase tracking-wider">Avg Speed</div>
+            <div className="text-xs font-mono font-medium text-zinc-900">{metrics.avgTokensPerSecond.toFixed(1)} t/s</div>
           </div>
           <button
             onClick={toggleAutoRun}
             disabled={status !== 'online'}
             className={`p-2 rounded-lg transition-all ${
               isAutoRunning 
-                ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20' 
-                : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                ? 'bg-red-50 text-red-600 hover:bg-red-100' 
+                : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
             } disabled:opacity-50 disabled:cursor-not-allowed`}
             title={isAutoRunning ? "Stop Auto-Prompt" : "Start Auto-Prompt"}
           >
@@ -183,51 +183,53 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
         </div>
       </div>
       
-      {/* Chat Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      {/* Chat Area - Split Panels */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-gray-500 space-y-3">
+          <div className="h-full flex flex-col items-center justify-center text-zinc-400 space-y-3">
             <Bot className="w-8 h-8 opacity-20" />
             <p className="text-sm text-center">Click play to start inference.</p>
           </div>
         ) : (
           messages.map((msg) => (
-            <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              {msg.role === 'assistant' && (
-                <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0 border border-emerald-500/30 mt-1">
-                  <Bot className="w-3 h-3 text-emerald-400" />
+            <div key={msg.id} className="flex flex-col gap-2">
+              {/* Prompt Panel */}
+              {msg.role === 'user' && (
+                <div className="bg-zinc-100 border border-zinc-200 rounded-lg p-3 text-xs text-zinc-700 font-medium">
+                  {msg.content}
                 </div>
               )}
               
-              <div className={`max-w-[85%] flex flex-col gap-1.5 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                <div className={`p-3 rounded-2xl ${
-                  msg.role === 'user' 
-                    ? 'bg-white/10 text-white rounded-tr-sm' 
-                    : 'bg-black/50 border border-white/5 rounded-tl-sm'
-                }`}>
-                  <p className="text-xs leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-                </div>
-                
-                {msg.metrics && (
-                  <div className="flex flex-wrap gap-2 text-[10px] font-mono text-gray-500 px-1">
-                    <span className="flex items-center gap-1">
-                      <Zap className="w-3 h-3 text-emerald-500/70" />
-                      {msg.metrics.tokensPerSecond.toFixed(1)} t/s
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Activity className="w-3 h-3" />
-                      {msg.metrics.evalCount} tkns
-                    </span>
+              {/* Output Panel */}
+              {msg.role === 'assistant' && (
+                <div className="bg-white border border-zinc-200 rounded-lg p-3 shadow-sm">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Bot className="w-4 h-4 text-zinc-400" />
+                    <span className="text-[10px] font-semibold text-zinc-500 uppercase">Response</span>
                   </div>
-                )}
-              </div>
+                  <p className="text-xs text-zinc-800 leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                  
+                  {msg.metrics && (
+                    <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-zinc-100 text-[10px] font-mono text-zinc-500">
+                      <span className="flex items-center gap-1">
+                        <Zap className="w-3 h-3 text-emerald-500" />
+                        {msg.metrics.tokensPerSecond.toFixed(1)} t/s
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Activity className="w-3 h-3 text-zinc-400" />
+                        {msg.metrics.evalCount} tokens
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))
         )}
         {isGenerating && (
-          <div className="flex items-center gap-2 text-[10px] font-mono text-emerald-400 p-2">
-            <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
-            GENERATING
+          <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500 p-2">
+            <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-pulse"></span>
+            GENERATING...
           </div>
         )}
         <div ref={messagesEndRef} />
@@ -238,13 +240,13 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-gray-100 font-sans p-4 md:p-6">
+    <div className="min-h-screen bg-zinc-50 text-zinc-900 font-sans p-4 md:p-6">
       <div className="max-w-[1600px] mx-auto">
         <div className="flex items-center gap-3 mb-8">
-          <Cpu className="w-8 h-8 text-emerald-400" />
+          <Cpu className="w-8 h-8 text-zinc-900" />
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Ampere Density Cluster</h1>
-            <p className="text-gray-400 text-sm">4x Independent Qwen3-8B-GGUF Instances</p>
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Ampere Density Cluster</h1>
+            <p className="text-zinc-500 text-sm">4x Independent Qwen3-8B-GGUF Instances</p>
           </div>
         </div>
 
