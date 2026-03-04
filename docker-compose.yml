@@ -11,6 +11,8 @@ services:
       - LLAMA_API_URL_3=http://llama-cpp-3:8080
       - LLAMA_API_URL_4=http://llama-cpp-4:8080
       - NODE_ENV=production
+    networks:
+      - llama-net
     depends_on:
       - llama-cpp-1
       - llama-cpp-2
@@ -18,45 +20,61 @@ services:
       - llama-cpp-4
 
   llama-cpp-1:
-    image: ghcr.io/ggerganov/llama.cpp:server
+    image: ${LLAMA_CPP_IMAGE}
+    env_file: .env
     ports:
       - "8080:8080"
+    networks:
+      - llama-net
     command: >
-      --hf-repo Qwen/Qwen3-8B-GGUF
-      --hf-file *q4_k_m.gguf
+      --hf-repo ${HF_REPO}
+      --hf-file ${HF_FILE}
       --port 8080
       --host 0.0.0.0
-      -c 2048
+      -c ${CONTEXT_SIZE}
 
   llama-cpp-2:
-    image: ghcr.io/ggerganov/llama.cpp:server
+    image: ${LLAMA_CPP_IMAGE}
+    env_file: .env
     ports:
       - "8081:8080"
+    networks:
+      - llama-net
     command: >
-      --hf-repo Qwen/Qwen3-8B-GGUF
-      --hf-file *q4_k_m.gguf
+      --hf-repo ${HF_REPO}
+      --hf-file ${HF_FILE}
       --port 8080
       --host 0.0.0.0
-      -c 2048
+      -c ${CONTEXT_SIZE}
 
   llama-cpp-3:
-    image: ghcr.io/ggerganov/llama.cpp:server
+    image: ${LLAMA_CPP_IMAGE}
+    env_file: .env
     ports:
       - "8082:8080"
+    networks:
+      - llama-net
     command: >
-      --hf-repo Qwen/Qwen3-8B-GGUF
-      --hf-file *q4_k_m.gguf
+      --hf-repo ${HF_REPO}
+      --hf-file ${HF_FILE}
       --port 8080
       --host 0.0.0.0
-      -c 2048
+      -c ${CONTEXT_SIZE}
 
   llama-cpp-4:
-    image: ghcr.io/ggerganov/llama.cpp:server
+    image: ${LLAMA_CPP_IMAGE}
+    env_file: .env
     ports:
       - "8083:8080"
+    networks:
+      - llama-net
     command: >
-      --hf-repo Qwen/Qwen3-8B-GGUF
-      --hf-file *q4_k_m.gguf
+      --hf-repo ${HF_REPO}
+      --hf-file ${HF_FILE}
       --port 8080
       --host 0.0.0.0
-      -c 2048
+      -c ${CONTEXT_SIZE}
+
+networks:
+  llama-net:
+    driver: bridge
