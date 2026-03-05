@@ -191,7 +191,7 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
     <div className="bg-white border border-zinc-200 rounded-xl shadow-sm flex flex-col h-[1100px] overflow-hidden">
       <div className="p-4 border-b border-zinc-100 bg-zinc-50 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <img src="https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png" alt="llama.cpp" className="w-8 h-8 object-contain" referrerPolicy="no-referrer" />
+          <img src="https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png" alt="llama.cpp" className="w-16 h-16 object-contain" referrerPolicy="no-referrer" />
           <h2 className="font-semibold text-sm text-zinc-900 truncate">{name}</h2>
           <div className="flex items-center gap-1.5 ml-auto">
             <div className={`w-2 h-2 rounded-full ${status === 'online' ? 'bg-emerald-500' : status === 'checking' ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
