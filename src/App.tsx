@@ -191,9 +191,9 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
     <div className="bg-white border border-zinc-200 rounded-xl shadow-sm flex flex-col h-[1100px] overflow-hidden">
       <div className="p-4 border-b border-zinc-100 bg-zinc-50 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Server className="w-5 h-5 text-zinc-500" />
-          <h2 className="font-semibold text-sm text-zinc-900">{name}</h2>
-          <div className="flex items-center gap-1.5">
+          <img src="https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png" alt="llama.cpp" className="w-5 h-5 object-contain" referrerPolicy="no-referrer" />
+          <h2 className="font-semibold text-sm text-zinc-900 truncate">{name}</h2>
+          <div className="flex items-center gap-1.5 ml-auto">
             <div className={`w-2 h-2 rounded-full ${status === 'online' ? 'bg-emerald-500' : status === 'checking' ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
             <span className="text-[10px] font-semibold text-zinc-500 uppercase">{status}</span>
           </div>
@@ -258,10 +258,10 @@ export default function App() {
         </div>
 
         <div className="grid grid-cols-4 gap-4">
-          <ChatbotInstance id={1} name="llama.cpp Engine 1 (Port 8080)" />
-          <ChatbotInstance id={2} name="llama.cpp Engine 2 (Port 8081)" />
-          <ChatbotInstance id={3} name="llama.cpp Engine 3 (Port 8082)" />
-          <ChatbotInstance id={4} name="llama.cpp Engine 4 (Port 8083)" />
+          <ChatbotInstance id={1} name="llama.cpp 1 (8080)" />
+          <ChatbotInstance id={2} name="llama.cpp 2 (8081)" />
+          <ChatbotInstance id={3} name="llama.cpp 3 (8082)" />
+          <ChatbotInstance id={4} name="llama.cpp 4 (8083)" />
         </div>
       </div>
     </div>
