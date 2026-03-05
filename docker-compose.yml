@@ -35,10 +35,7 @@ services:
       --host 0.0.0.0
       -c ${CONTEXT_SIZE}
       -t 16
-    deploy:
-      resources:
-        reservations:
-          cpuset: "0-31"
+    cpuset: "0-31"
 
   llama-cpp-2:
     image: ${LLAMA_CPP_IMAGE}
@@ -56,10 +53,7 @@ services:
       --host 0.0.0.0
       -c ${CONTEXT_SIZE}
       -t 16
-    deploy:
-      resources:
-        reservations:
-          cpuset: "32-63"
+    cpuset: "32-63"
 
   llama-cpp-3:
     image: ${LLAMA_CPP_IMAGE}
@@ -77,10 +71,7 @@ services:
       --host 0.0.0.0
       -c ${CONTEXT_SIZE}
       -t 16
-    deploy:
-      resources:
-        reservations:
-          cpuset: "64-95"
+    cpuset: "64-95"
 
   llama-cpp-4:
     image: ${LLAMA_CPP_IMAGE}
@@ -98,10 +89,7 @@ services:
       --host 0.0.0.0
       -c ${CONTEXT_SIZE}
       -t 16
-    deploy:
-      resources:
-        reservations:
-          cpuset: "96-127"
+    cpuset: "96-127"
 
 networks:
   llama-net:
