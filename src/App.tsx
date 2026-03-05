@@ -1,35 +1,31 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bot, User, Play, Square, Activity, Cpu, Server, Zap, Clock } from 'lucide-react';
 
-const PROMPTS_PER_INSTANCE: Record<number, string[]> = {
-  1: [
-    "Explain the theory of relativity in simple terms.",
-    "What is the speed of light?",
-    "How does gravity work?",
-    "What is a black hole?",
-    "Explain time dilation."
-  ],
-  2: [
-    "Write a short poem about a robot learning to love.",
-    "Write a haiku about technology.",
-    "Write a story about a futuristic city.",
-    "Describe a world without internet.",
-    "Write a dialogue between two AI."
-  ],
-  3: [
-    "What are the main differences between classical and quantum computing?",
-    "What is a qubit?",
-    "Explain quantum entanglement.",
-    "How does quantum computing change cryptography?",
-    "What is the future of quantum computing?"
-  ],
-  4: [
-    "Describe a futuristic city powered entirely by renewable energy.",
-    "How can we achieve carbon neutrality?",
-    "What are the benefits of solar energy?",
-    "Explain the importance of wind energy.",
-    "How does a smart grid work?"
-  ]
+const PROMPTS_PER_INSTANCE: Record<number, Record<number, string[]>> = {
+  1: {
+    0: ["Explain the theory of relativity in simple terms.", "What is the speed of light?", "How does gravity work?", "What is a black hole?", "Explain time dilation."],
+    1: ["What is the capital of France?", "Who wrote Hamlet?", "What is the largest planet?", "How many continents are there?", "What is the chemical symbol for water?"],
+    2: ["Explain photosynthesis.", "What is DNA?", "How do vaccines work?", "What is the function of the heart?", "What is the human brain's main function?"],
+    3: ["What is the history of the internet?", "Who invented the telephone?", "What was the first computer?", "What is artificial intelligence?", "How does a transistor work?"]
+  },
+  2: {
+    0: ["Write a short poem about a robot learning to love.", "Write a haiku about technology.", "Write a story about a futuristic city.", "Describe a world without internet.", "Write a dialogue between two AI."],
+    1: ["What is the best way to learn a new language?", "How do you improve memory?", "What are the benefits of reading?", "How does sleep affect learning?", "What is critical thinking?"],
+    2: ["What is the importance of art?", "How does music affect the brain?", "What is the role of architecture?", "How does film influence culture?", "What is the purpose of literature?"],
+    3: ["What is the future of space exploration?", "How do we colonize Mars?", "What are the challenges of space travel?", "What is the search for extraterrestrial life?", "What is the importance of space research?"]
+  },
+  3: {
+    0: ["What are the main differences between classical and quantum computing?", "What is a qubit?", "Explain quantum entanglement.", "How does quantum computing change cryptography?", "What is the future of quantum computing?"],
+    1: ["What is the impact of climate change?", "How can we reduce carbon emissions?", "What are the effects of global warming?", "What is renewable energy?", "What is sustainable development?"],
+    2: ["What is the role of ethics in technology?", "How does AI impact privacy?", "What is the future of work?", "How does technology affect social interaction?", "What is the digital divide?"],
+    3: ["What is the importance of biodiversity?", "How do ecosystems work?", "What is the impact of deforestation?", "What is conservation biology?", "How can we protect endangered species?"]
+  },
+  4: {
+    0: ["Describe a futuristic city powered entirely by renewable energy.", "How can we achieve carbon neutrality?", "What are the benefits of solar energy?", "Explain the importance of wind energy.", "How does a smart grid work?"],
+    1: ["What is the history of mathematics?", "Who invented calculus?", "What is the importance of statistics?", "How do we use geometry in daily life?", "What is the beauty of prime numbers?"],
+    2: ["What is the philosophy of happiness?", "How do we define success?", "What is the meaning of life?", "How does stoicism help in modern life?", "What is the importance of mindfulness?"],
+    3: ["What is the future of medicine?", "How does gene editing work?", "What is the role of nanotechnology in medicine?", "How do vaccines eradicate diseases?", "What is the importance of personalized medicine?"]
+  }
 };
 
 interface Message {
@@ -140,9 +136,10 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
       if (!autoRunRef.current) return;
 
       const promises = chatbots.map(async (cb, index) => {
-        if (cb.isGenerating || cb.currentPromptIndex >= PROMPTS_PER_INSTANCE[id].length) return;
+        const chatbotPrompts = PROMPTS_PER_INSTANCE[id][index];
+        if (cb.isGenerating || cb.currentPromptIndex >= chatbotPrompts.length) return;
         
-        const prompt = PROMPTS_PER_INSTANCE[id][cb.currentPromptIndex];
+        const prompt = chatbotPrompts[cb.currentPromptIndex];
         await generateResponse(index, prompt);
         
         setChatbots(prev => prev.map((c, i) => i === index ? { ...c, currentPromptIndex: c.currentPromptIndex + 1 } : c));
@@ -150,7 +147,7 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
 
       await Promise.all(promises);
 
-      if (autoRunRef.current && chatbots.some(cb => cb.currentPromptIndex < PROMPTS_PER_INSTANCE[id].length)) {
+      if (autoRunRef.current && chatbots.some(cb => cb.currentPromptIndex < PROMPTS_PER_INSTANCE[id][cb.id].length)) {
         timeoutId = setTimeout(runCycle, 15000);
       } else {
         setIsAutoRunning(false);
@@ -174,7 +171,10 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
         <div className="flex items-center gap-3">
           <Server className="w-5 h-5 text-zinc-500" />
           <h2 className="font-semibold text-sm text-zinc-900">{name}</h2>
-          <div className={`w-2 h-2 rounded-full ${status === 'online' ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
+          <div className="flex items-center gap-1.5">
+            <div className={`w-2 h-2 rounded-full ${status === 'online' ? 'bg-emerald-500' : status === 'checking' ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
+            <span className="text-[10px] font-semibold text-zinc-500 uppercase">{status}</span>
+          </div>
         </div>
         <button
           onClick={toggleAutoRun}
