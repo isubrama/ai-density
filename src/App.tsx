@@ -221,11 +221,11 @@ export default function App() {
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900 font-sans p-4 md:p-6">
       <div className="max-w-[1600px] mx-auto">
-        <div className="flex items-center gap-4 mb-8">
-          <img src="https://uawartifacts.blob.core.windows.net/upload-files/AmpereSoftbank_e2225bdd2b.svg" alt="Ampere Softbank" className="w-48 h-48 object-contain" referrerPolicy="no-referrer" />
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-900">High-Density LLM Orchestration on Ampere CPUs</h1>
-            <p className="text-zinc-500 text-sm">High-throughput inference across multi-instance compute clusters.</p>
+        <div className="flex flex-col items-center justify-center text-center gap-6 mb-12">
+          <img src="https://uawartifacts.blob.core.windows.net/upload-files/AmpereSoftbank_e2225bdd2b.svg" alt="Ampere Softbank" className="w-64 h-64 object-contain" referrerPolicy="no-referrer" />
+          <div className="max-w-3xl">
+            <h1 className="text-4xl font-bold tracking-tight text-zinc-900 mb-2">High-Density LLM Orchestration on Ampere CPUs</h1>
+            <p className="text-zinc-500 text-lg">High-throughput inference across multi-instance compute clusters.</p>
           </div>
         </div>
 
