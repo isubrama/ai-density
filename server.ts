@@ -25,34 +25,14 @@ async function startServer() {
     try {
       const url = getLlamaUrl(req.params.id);
       console.log(`Fetching health from: ${url}/health`);
-      
-      const [healthRes, metricsRes] = await Promise.all([
-        fetch(`${url}/health`),
-        fetch(`${url}/metrics`).catch(() => null)
-      ]);
-
-      if (!healthRes.ok) {
-        throw new Error(`llama.cpp health API error: ${healthRes.statusText}`);
+      const response = await fetch(`${url}/health`);
+      if (!response.ok) {
+        throw new Error(`llama.cpp API error: ${response.statusText}`);
       }
-      
-      const healthData = await healthRes.json();
-      let cpuUsage = 0;
-      
-      if (metricsRes && metricsRes.ok) {
-        const metricsText = await metricsRes.text();
-        // Simple parsing for llama.cpp metrics (assuming it returns some CPU metric)
-        // This is a placeholder as the actual metrics format depends on the llama.cpp version
-        const match = metricsText.match(/llama_cpu_usage_percent (\d+\.?\d*)/);
-        if (match) {
-          cpuUsage = parseFloat(match[1]);
-        }
-      }
-
-      res.json({ 
-        status: healthData.status === "ok" ? "online" : "offline", 
-        details: healthData,
-        cpuUsage
-      });
+      const text = await response.text();
+      console.log(`Response from ${url}/health: ${text.substring(0, 100)}`);
+      const data = JSON.parse(text);
+      res.json({ status: data.status === "ok" ? "online" : "offline", details: data });
     } catch (error: any) {
       console.log(`Status check failed for ${req.params.id}: ${error.message}`);
       res.json({ status: "offline", error: error.message });
