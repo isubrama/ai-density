@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bot, User, Play, Square, Activity, Cpu, Server, Zap, Clock } from 'lucide-react';
+import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
 import prompts from './prompts.json';
 
 const PROMPTS_PER_INSTANCE: Record<number, Record<number, string[]>> = prompts as any;
@@ -16,17 +17,27 @@ interface Message {
   };
 }
 
+interface Chatbot {
+  id: number;
+  messages: Message[];
+  currentPromptIndex: number;
+  isGenerating: boolean;
+  metrics: { totalTokens: number; avgTokensPerSecond: number; requestsCompleted: number };
+  tpsHistory: number[];
+}
+
 function ChatbotInstance({ id, name }: { id: number, name: string }) {
   const [isAutoRunning, setIsAutoRunning] = useState(false);
   const [status, setStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   
   // 5 chatbots per instance
-  const [chatbots, setChatbots] = useState(Array.from({ length: 5 }, (_, i) => ({
+  const [chatbots, setChatbots] = useState<Chatbot[]>(Array.from({ length: 5 }, (_, i) => ({
     id: i,
     messages: [] as Message[],
     currentPromptIndex: 0,
     isGenerating: false,
-    metrics: { totalTokens: 0, avgTokensPerSecond: 0, requestsCompleted: 0 }
+    metrics: { totalTokens: 0, avgTokensPerSecond: 0, requestsCompleted: 0 },
+    tpsHistory: []
   })));
 
   const messageRefs = useRef<(HTMLDivElement | null)[]>(Array(5).fill(null));
@@ -101,7 +112,8 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
           avgTokensPerSecond: cb.metrics.avgTokensPerSecond === 0 
             ? tokensPerSecond 
             : ((cb.metrics.avgTokensPerSecond * cb.metrics.requestsCompleted) + tokensPerSecond) / (cb.metrics.requestsCompleted + 1)
-        }
+        },
+        tpsHistory: [...cb.tpsHistory, tokensPerSecond].slice(-20)
       } : cb));
 
     } catch (error) {
@@ -188,7 +200,17 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
       <div className="flex-1 flex flex-col gap-2 p-2 overflow-y-auto">
         {chatbots.map((cb, index) => (
           <div key={index} className="border border-zinc-100 rounded-lg flex flex-col overflow-hidden bg-zinc-50 h-[180px]">
-            <div className="p-2 border-b border-zinc-100 text-[10px] font-semibold text-zinc-500 uppercase bg-zinc-100">Chatbot {index + 1}</div>
+            <div className="p-2 border-b border-zinc-100 text-[10px] font-semibold text-zinc-500 uppercase bg-zinc-100 flex justify-between items-center">
+              <span>Chatbot {index + 1}</span>
+              <div className="h-4 w-16">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={cb.tpsHistory.map((tps, i) => ({ tps, i }))}>
+                    <Line type="monotone" dataKey="tps" stroke="#10b981" strokeWidth={2} dot={false} />
+                    <YAxis domain={['auto', 'auto']} hide />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
             <div className="flex flex-col flex-1 overflow-hidden">
               <div ref={el => promptRefs.current[index] = el} className="h-12 border-b border-zinc-100 overflow-y-auto p-2">
                 <div className="text-[9px] font-bold text-zinc-400 uppercase mb-1">Prompts</div>
