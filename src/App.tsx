@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Bot, User, Play, Square, Activity, Cpu, Server, Zap, Clock } from 'lucide-react';
-import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
 import prompts from './prompts.json';
 
 const PROMPTS_PER_INSTANCE: Record<number, Record<number, string[]>> = prompts as any;
@@ -17,28 +16,20 @@ interface Message {
   };
 }
 
-interface Chatbot {
-  id: number;
-  messages: Message[];
-  currentPromptIndex: number;
-  isGenerating: boolean;
-  metrics: { totalTokens: number; avgTokensPerSecond: number; requestsCompleted: number };
-  tpsHistory: number[];
-}
-
 function ChatbotInstance({ id, name }: { id: number, name: string }) {
   const [isAutoRunning, setIsAutoRunning] = useState(false);
   const [status, setStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   
   // 5 chatbots per instance
-  const [chatbots, setChatbots] = useState<Chatbot[]>(Array.from({ length: 5 }, (_, i) => ({
+  const [chatbots, setChatbots] = useState(Array.from({ length: 5 }, (_, i) => ({
     id: i,
     messages: [] as Message[],
     currentPromptIndex: 0,
     isGenerating: false,
-    metrics: { totalTokens: 0, avgTokensPerSecond: 0, requestsCompleted: 0 },
-    tpsHistory: []
+    metrics: { totalTokens: 0, avgTokensPerSecond: 0, requestsCompleted: 0 }
   })));
+
+  const abortControllers = useRef<(AbortController | null)[]>(Array(5).fill(null));
 
   const messageRefs = useRef<(HTMLDivElement | null)[]>(Array(5).fill(null));
   const promptRefs = useRef<(HTMLDivElement | null)[]>(Array(5).fill(null));
@@ -73,7 +64,7 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
     }
   };
 
-  const generateResponse = async (chatbotIndex: number, prompt: string) => {
+  const generateResponse = useCallback(async (chatbotIndex: number, prompt: string, signal: AbortSignal) => {
     setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { ...cb, isGenerating: true } : cb));
     const userMsgId = Date.now().toString() + chatbotIndex;
     setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { ...cb, messages: [...cb.messages, { id: userMsgId, role: 'user', content: prompt }] } : cb));
@@ -82,7 +73,8 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
       const res = await fetch(`/api/chat/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({ prompt }),
+        signal
       });
 
       if (!res.ok) throw new Error('Failed to generate');
@@ -112,11 +104,14 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
           avgTokensPerSecond: cb.metrics.avgTokensPerSecond === 0 
             ? tokensPerSecond 
             : ((cb.metrics.avgTokensPerSecond * cb.metrics.requestsCompleted) + tokensPerSecond) / (cb.metrics.requestsCompleted + 1)
-        },
-        tpsHistory: [...cb.tpsHistory, tokensPerSecond].slice(-20)
+        }
       } : cb));
 
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log('Generation aborted');
+        return;
+      }
       console.error(error);
       setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { 
         ...cb, 
@@ -129,39 +124,26 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
     } finally {
       setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { ...cb, isGenerating: false } : cb));
     }
-  };
+  }, [id]);
 
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-
-    const runCycle = async () => {
-      if (!autoRunRef.current) return;
-
-      const promises = chatbots.map(async (cb, index) => {
-        const chatbotPrompts = PROMPTS_PER_INSTANCE[id][index];
-        if (cb.isGenerating || cb.currentPromptIndex >= chatbotPrompts.length) return;
-        
-        const prompt = chatbotPrompts[cb.currentPromptIndex];
-        await generateResponse(index, prompt);
-        
-        setChatbots(prev => prev.map((c, i) => i === index ? { ...c, currentPromptIndex: c.currentPromptIndex + 1 } : c));
-      });
-
-      await Promise.all(promises);
-
-      if (autoRunRef.current && chatbots.some(cb => cb.currentPromptIndex < PROMPTS_PER_INSTANCE[id][cb.id].length)) {
-        timeoutId = setTimeout(runCycle, 300000);
-      } else {
-        setIsAutoRunning(false);
-      }
-    };
-
-    if (isAutoRunning) {
-      runCycle();
+    if (!isAutoRunning) {
+      abortControllers.current.forEach(controller => controller?.abort());
+      abortControllers.current = Array(5).fill(null);
+      return;
     }
 
-    return () => clearTimeout(timeoutId);
-  }, [isAutoRunning, chatbots, id]);
+    chatbots.forEach((cb, index) => {
+      if (!cb.isGenerating && cb.currentPromptIndex < PROMPTS_PER_INSTANCE[id][index].length) {
+        const controller = new AbortController();
+        abortControllers.current[index] = controller;
+        
+        generateResponse(index, PROMPTS_PER_INSTANCE[id][index][cb.currentPromptIndex], controller.signal).then(() => {
+          setChatbots(prev => prev.map((c, i) => i === index ? { ...c, currentPromptIndex: c.currentPromptIndex + 1 } : c));
+        });
+      }
+    });
+  }, [isAutoRunning, chatbots, id, generateResponse]);
 
   const toggleAutoRun = () => {
     if (!isAutoRunning) {
@@ -200,17 +182,7 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
       <div className="flex-1 flex flex-col gap-2 p-2 overflow-y-auto">
         {chatbots.map((cb, index) => (
           <div key={index} className="border border-zinc-100 rounded-lg flex flex-col overflow-hidden bg-zinc-50 h-[180px]">
-            <div className="p-2 border-b border-zinc-100 text-[10px] font-semibold text-zinc-500 uppercase bg-zinc-100 flex justify-between items-center">
-              <span>Chatbot {index + 1}</span>
-              <div className="h-4 w-16">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={cb.tpsHistory.map((tps, i) => ({ tps, i }))}>
-                    <Line type="monotone" dataKey="tps" stroke="#10b981" strokeWidth={2} dot={false} />
-                    <YAxis domain={['auto', 'auto']} hide />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+            <div className="p-2 border-b border-zinc-100 text-[10px] font-semibold text-zinc-500 uppercase bg-zinc-100">Chatbot {index + 1}</div>
             <div className="flex flex-col flex-1 overflow-hidden">
               <div ref={el => promptRefs.current[index] = el} className="h-12 border-b border-zinc-100 overflow-y-auto p-2">
                 <div className="text-[9px] font-bold text-zinc-400 uppercase mb-1">Prompts</div>
