@@ -221,11 +221,13 @@ export default function App() {
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900 font-sans p-4 md:p-6">
       <div className="max-w-[1600px] mx-auto">
-        <div className="flex flex-row items-center gap-8 mb-12">
-          <img src="https://upload.wikimedia.org/wikipedia/commons/f/f4/Ampere_Computing_LLC_Logo.svg" alt="Ampere Computing Logo" className="w-48 h-48 object-contain" referrerPolicy="no-referrer" />
-          <div className="flex-1">
-            <h1 className="text-4xl font-bold tracking-tight text-zinc-900 mb-2">High-Density LLM Orchestration on Ampere CPUs</h1>
-            <p className="text-zinc-500 text-lg">High-throughput inference across multi-instance compute clusters.</p>
+        <div className="flex justify-center mb-12">
+          <div className="flex flex-row items-center gap-8">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/f/f4/Ampere_Computing_LLC_Logo.svg" alt="Ampere Computing Logo" className="w-48 h-48 object-contain" referrerPolicy="no-referrer" />
+            <div>
+              <h1 className="text-4xl font-bold tracking-tight text-zinc-900 mb-2">High-Density LLM Orchestration on Ampere CPUs</h1>
+              <p className="text-zinc-500 text-lg">High-throughput inference across multi-instance compute clusters.</p>
+            </div>
           </div>
         </div>
 
