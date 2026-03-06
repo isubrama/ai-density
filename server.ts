@@ -39,12 +39,6 @@ async function startServer() {
     }
   });
 
-  app.get("/api/cpu/:id", async (req, res) => {
-    // Mock CPU usage for now
-    const cpuUsage = Math.random() * 100;
-    res.json({ cpuUsage });
-  });
-
   app.post("/api/chat/:id", async (req, res) => {
     console.log(`Chat request for instance ${req.params.id}`);
     try {

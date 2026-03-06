@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bot, User, Play, Square, Activity, Cpu, Server, Zap, Clock } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import prompts from './prompts.json';
 
 const PROMPTS_PER_INSTANCE: Record<number, Record<number, string[]>> = prompts as any;
@@ -20,7 +19,6 @@ interface Message {
 function ChatbotInstance({ id, name }: { id: number, name: string }) {
   const [isAutoRunning, setIsAutoRunning] = useState(false);
   const [status, setStatus] = useState<'online' | 'offline' | 'checking'>('checking');
-  const [cpuHistory, setCpuHistory] = useState<{ time: string, usage: number }[]>([]);
   
   // 5 chatbots per instance
   const [chatbots, setChatbots] = useState(Array.from({ length: 5 }, (_, i) => ({
@@ -51,23 +49,6 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
   useEffect(() => {
     checkStatus();
     const interval = setInterval(checkStatus, 10000);
-    return () => clearInterval(interval);
-  }, [id]);
-
-  useEffect(() => {
-    const fetchCpu = async () => {
-      try {
-        const res = await fetch(`/api/cpu/${id}`);
-        const data = await res.json();
-        setCpuHistory(prev => {
-          const newHistory = [...prev, { time: new Date().toLocaleTimeString(), usage: data.cpuUsage }];
-          return newHistory.slice(-20); // Keep last 20 points
-        });
-      } catch (e) {
-        console.error(e);
-      }
-    };
-    const interval = setInterval(fetchCpu, 2000);
     return () => clearInterval(interval);
   }, [id]);
 
@@ -201,16 +182,6 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
       </div>
       
       <div className="px-4 py-2 bg-zinc-100 text-[10px] font-mono text-zinc-600 border-b border-zinc-200">
-        <div className="h-16 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={cpuHistory}>
-              <XAxis dataKey="time" hide />
-              <YAxis domain={[0, 100]} hide />
-              <Tooltip />
-              <Line type="monotone" dataKey="usage" stroke="#3b82f6" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
         Aggregate Performance: {chatbots.reduce((acc, cb) => acc + cb.metrics.avgTokensPerSecond, 0).toFixed(2)} TPS
       </div>
       
