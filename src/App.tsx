@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Bot, User, Play, Square, Activity, Cpu, Server, Zap, Clock } from 'lucide-react';
 import prompts from './prompts.json';
 
@@ -28,8 +28,6 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
     isGenerating: false,
     metrics: { totalTokens: 0, avgTokensPerSecond: 0, requestsCompleted: 0 }
   })));
-
-  const abortControllers = useRef<(AbortController | null)[]>(Array(5).fill(null));
 
   const messageRefs = useRef<(HTMLDivElement | null)[]>(Array(5).fill(null));
   const promptRefs = useRef<(HTMLDivElement | null)[]>(Array(5).fill(null));
@@ -64,7 +62,7 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
     }
   };
 
-  const generateResponse = useCallback(async (chatbotIndex: number, prompt: string, signal: AbortSignal) => {
+  const generateResponse = async (chatbotIndex: number, prompt: string) => {
     setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { ...cb, isGenerating: true } : cb));
     const userMsgId = Date.now().toString() + chatbotIndex;
     setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { ...cb, messages: [...cb.messages, { id: userMsgId, role: 'user', content: prompt }] } : cb));
@@ -73,8 +71,7 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
       const res = await fetch(`/api/chat/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
-        signal
+        body: JSON.stringify({ prompt })
       });
 
       if (!res.ok) throw new Error('Failed to generate');
@@ -108,10 +105,6 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
       } : cb));
 
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        console.log('Generation aborted');
-        return;
-      }
       console.error(error);
       setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { 
         ...cb, 
@@ -124,26 +117,39 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
     } finally {
       setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { ...cb, isGenerating: false } : cb));
     }
-  }, [id]);
+  };
 
   useEffect(() => {
-    if (!isAutoRunning) {
-      abortControllers.current.forEach(controller => controller?.abort());
-      abortControllers.current = Array(5).fill(null);
-      return;
+    let timeoutId: NodeJS.Timeout;
+
+    const runCycle = async () => {
+      if (!autoRunRef.current) return;
+
+      const promises = chatbots.map(async (cb, index) => {
+        const chatbotPrompts = PROMPTS_PER_INSTANCE[id][index];
+        if (cb.isGenerating || cb.currentPromptIndex >= chatbotPrompts.length) return;
+        
+        const prompt = chatbotPrompts[cb.currentPromptIndex];
+        await generateResponse(index, prompt);
+        
+        setChatbots(prev => prev.map((c, i) => i === index ? { ...c, currentPromptIndex: c.currentPromptIndex + 1 } : c));
+      });
+
+      await Promise.all(promises);
+
+      if (autoRunRef.current && chatbots.some(cb => cb.currentPromptIndex < PROMPTS_PER_INSTANCE[id][cb.id].length)) {
+        timeoutId = setTimeout(runCycle, 300000);
+      } else {
+        setIsAutoRunning(false);
+      }
+    };
+
+    if (isAutoRunning) {
+      runCycle();
     }
 
-    chatbots.forEach((cb, index) => {
-      if (!cb.isGenerating && cb.currentPromptIndex < PROMPTS_PER_INSTANCE[id][index].length) {
-        const controller = new AbortController();
-        abortControllers.current[index] = controller;
-        
-        generateResponse(index, PROMPTS_PER_INSTANCE[id][index][cb.currentPromptIndex], controller.signal).then(() => {
-          setChatbots(prev => prev.map((c, i) => i === index ? { ...c, currentPromptIndex: c.currentPromptIndex + 1 } : c));
-        });
-      }
-    });
-  }, [isAutoRunning, chatbots, id, generateResponse]);
+    return () => clearTimeout(timeoutId);
+  }, [isAutoRunning, chatbots, id]);
 
   const toggleAutoRun = () => {
     if (!isAutoRunning) {
