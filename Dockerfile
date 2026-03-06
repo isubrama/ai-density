@@ -2,8 +2,10 @@ FROM node:20
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm install
+ENV NODE_ENV=production
+
+COPY package*.json package-lock.json ./
+RUN npm ci --include=optional
 
 COPY . .
 RUN npm run build
