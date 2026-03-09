@@ -94,10 +94,20 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, onRunningCha
     try {
       const res = await fetch(`/api/models/${id}`);
       const data = await res.json();
+      
+      let modelInfo = '';
       if (data.models && data.models.length > 0) {
-        // llama.cpp might return model path, let's extract the name
-        const modelPath = data.models[0].id;
-        const modelName = modelPath.split('/').pop() || modelPath;
+        modelInfo = data.models[0].id;
+      } else if (data.data && data.data.length > 0) {
+        modelInfo = data.data[0].id;
+      } else if (data.model_path) {
+        modelInfo = data.model_path;
+      } else if (data.default_generation_settings?.model) {
+        modelInfo = data.default_generation_settings.model;
+      }
+
+      if (modelInfo) {
+        const modelName = modelInfo.split('/').pop() || modelInfo;
         setModel(modelName);
       } else {
         setModel('Unknown');
@@ -274,9 +284,16 @@ export default function App() {
 
   const [runningStates, setRunningStates] = useState([false, false, false, false]);
   const [tpsStates, setTpsStates] = useState([0, 0, 0, 0]);
+  const [peakTPS, setPeakTPS] = useState(0);
   
   const anyRunning = runningStates.some(r => r);
   const totalTPS = tpsStates.reduce((acc, tps) => acc + tps, 0);
+
+  useEffect(() => {
+    if (totalTPS > peakTPS) {
+      setPeakTPS(totalTPS);
+    }
+  }, [totalTPS]);
 
   const handleRunningChange = (index: number, running: boolean) => {
     setRunningStates(prev => {
@@ -318,6 +335,10 @@ export default function App() {
             <div className="flex flex-col items-center px-6 border-r border-zinc-100">
               <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">Cluster Throughput</span>
               <span className="text-3xl font-black text-zinc-900 font-mono">{totalTPS.toFixed(2)} <span className="text-sm font-normal text-zinc-500">TPS</span></span>
+            </div>
+            <div className="flex flex-col items-center px-6 border-r border-zinc-100">
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">Peak Throughput</span>
+              <span className="text-3xl font-black text-zinc-900 font-mono">{peakTPS.toFixed(2)} <span className="text-sm font-normal text-zinc-500">TPS</span></span>
             </div>
             <button
               onClick={handleToggleAll}

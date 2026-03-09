@@ -24,14 +24,22 @@ async function startServer() {
     console.log(`Fetching models for instance ${req.params.id}`);
     try {
       const url = getLlamaUrl(req.params.id);
-      const response = await fetch(`${url}/models`);
-      if (!response.ok) {
-        throw new Error(`llama.cpp API error: ${response.statusText}`);
+      // Try common llama.cpp endpoints
+      const endpoints = ["/v1/models", "/props", "/models"];
+      
+      for (const endpoint of endpoints) {
+        try {
+          const response = await fetch(`${url}${endpoint}`);
+          if (response.ok) {
+            const data = await response.json();
+            return res.json(data);
+          }
+        } catch (e) {
+          // Continue to next endpoint
+        }
       }
-      const data = await response.json();
-      // Assuming llama.cpp returns { "models": [ { "id": "..." } ] } or similar.
-      // I'll return the whole data for now, and let the frontend decide.
-      res.json(data);
+      
+      throw new Error(`Could not fetch model info from any endpoint`);
     } catch (error: any) {
       console.log(`Failed to fetch models for ${req.params.id}: ${error.message}`);
       res.status(500).json({ error: error.message });
