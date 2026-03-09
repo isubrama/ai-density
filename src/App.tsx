@@ -39,7 +39,12 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string }>(({ id, nam
         setChatbots(prev => prev.map(cb => ({ ...cb, currentPromptIndex: 0, messages: [] })));
         setIsAutoRunning(true);
       }
-    }
+    },
+    stop: () => {
+      setIsAutoRunning(false);
+    },
+    isAutoRunning,
+    status
   }));
 
   useEffect(() => {
@@ -255,10 +260,22 @@ export default function App() {
     useRef<any>(null)
   ];
 
-  const handleRunAll = () => {
-    instanceRefs.forEach(ref => {
-      ref.current?.start();
-    });
+  const [anyRunning, setAnyRunning] = useState(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const running = instanceRefs.some(ref => ref.current?.isAutoRunning);
+      setAnyRunning(running);
+    }, 100);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleToggleAll = () => {
+    if (anyRunning) {
+      instanceRefs.forEach(ref => ref.current?.stop());
+    } else {
+      instanceRefs.forEach(ref => ref.current?.start());
+    }
   };
 
   return (
@@ -273,11 +290,13 @@ export default function App() {
             </div>
           </div>
           <button
-            onClick={handleRunAll}
-            className="flex items-center gap-2 bg-zinc-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-zinc-800 transition-all shadow-lg active:scale-95"
+            onClick={handleToggleAll}
+            className={`flex items-center gap-2 px-8 py-3 rounded-xl font-bold transition-all shadow-lg active:scale-95 ${
+              anyRunning ? 'bg-red-50 text-red-600' : 'bg-zinc-900 text-white hover:bg-zinc-800'
+            }`}
           >
-            <Play size={20} fill="currentColor" />
-            Run All Instances
+            {anyRunning ? <Square size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
+            {anyRunning ? 'Stop All Instances' : 'Run All Instances'}
           </button>
         </div>
 
