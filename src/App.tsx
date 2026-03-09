@@ -16,7 +16,7 @@ interface Message {
   };
 }
 
-const ChatbotInstance = forwardRef<any, { id: number, name: string, onRunningChange?: (running: boolean) => void }>(({ id, name, onRunningChange }, ref) => {
+const ChatbotInstance = forwardRef<any, { id: number, name: string, onRunningChange?: (running: boolean) => void, onTPSChange?: (tps: number) => void }>(({ id, name, onRunningChange, onTPSChange }, ref) => {
   const [isAutoRunning, setIsAutoRunning] = useState(false);
   const [status, setStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   const [model, setModel] = useState<string>('Loading...');
@@ -68,7 +68,10 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, onRunningCha
         promptRefs.current[index]!.scrollTop = promptRefs.current[index]!.scrollHeight;
       }
     });
-  }, [chatbots]);
+    
+    const instanceTPS = chatbots.reduce((acc, cb) => acc + cb.metrics.avgTokensPerSecond, 0);
+    onTPSChange?.(instanceTPS);
+  }, [chatbots, onTPSChange]);
 
   useEffect(() => {
     checkStatus();
@@ -92,7 +95,10 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, onRunningCha
       const res = await fetch(`/api/models/${id}`);
       const data = await res.json();
       if (data.models && data.models.length > 0) {
-        setModel(data.models[0].id);
+        // llama.cpp might return model path, let's extract the name
+        const modelPath = data.models[0].id;
+        const modelName = modelPath.split('/').pop() || modelPath;
+        setModel(modelName);
       } else {
         setModel('Unknown');
       }
@@ -204,10 +210,12 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, onRunningCha
     <div className="bg-white border border-zinc-200 rounded-xl shadow-sm flex flex-col h-[1100px] overflow-hidden">
       <div className="p-4 border-b border-zinc-100 bg-zinc-50 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <img src="https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png" alt="llama.cpp" className="w-20 h-20 object-contain" referrerPolicy="no-referrer" />
+          <img src="https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png" alt="llama.cpp" className="w-16 h-16 object-contain" referrerPolicy="no-referrer" />
           <div className="flex flex-col">
             <h2 className="font-semibold text-sm text-zinc-900 truncate">{name}</h2>
-            <span className="text-[10px] text-zinc-500 font-mono">{model}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-zinc-500 font-mono bg-zinc-200 px-1.5 py-0.5 rounded">{model}</span>
+            </div>
           </div>
           <div className="flex items-center gap-1.5 ml-auto">
             <div className={`w-2 h-2 rounded-full ${status === 'online' ? 'bg-emerald-500' : status === 'checking' ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
@@ -216,14 +224,18 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, onRunningCha
         </div>
       </div>
       
-      <div className="px-4 py-2 bg-zinc-100 text-[10px] font-mono text-zinc-600 border-b border-zinc-200">
-        Aggregate Performance: {chatbots.reduce((acc, cb) => acc + cb.metrics.avgTokensPerSecond, 0).toFixed(2)} TPS
+      <div className="px-4 py-2 bg-zinc-100 text-[10px] font-mono text-zinc-600 border-b border-zinc-200 flex justify-between items-center">
+        <span>Throughput</span>
+        <span className="font-bold text-zinc-900">{chatbots.reduce((acc, cb) => acc + cb.metrics.avgTokensPerSecond, 0).toFixed(2)} TPS</span>
       </div>
       
       <div className="flex-1 flex flex-col gap-2 p-2 overflow-y-auto">
         {chatbots.map((cb, index) => (
           <div key={index} className="border border-zinc-100 rounded-lg flex flex-col overflow-hidden bg-zinc-50 h-[180px]">
-            <div className="p-2 border-b border-zinc-100 text-[10px] font-semibold text-zinc-500 uppercase bg-zinc-100">Chatbot {index + 1}</div>
+            <div className="p-2 border-b border-zinc-100 text-[10px] font-semibold text-zinc-500 uppercase bg-zinc-100 flex justify-between items-center">
+              <span>Chatbot {index + 1}</span>
+              {cb.isGenerating && <span className="text-[8px] bg-emerald-100 text-emerald-700 px-1 rounded animate-pulse">Processing</span>}
+            </div>
             <div className="flex flex-col flex-1 overflow-hidden">
               <div ref={el => promptRefs.current[index] = el} className="h-12 border-b border-zinc-100 overflow-y-auto p-2">
                 <div className="text-[9px] font-bold text-zinc-400 uppercase mb-1">Prompts</div>
@@ -261,12 +273,23 @@ export default function App() {
   ];
 
   const [runningStates, setRunningStates] = useState([false, false, false, false]);
+  const [tpsStates, setTpsStates] = useState([0, 0, 0, 0]);
+  
   const anyRunning = runningStates.some(r => r);
+  const totalTPS = tpsStates.reduce((acc, tps) => acc + tps, 0);
 
   const handleRunningChange = (index: number, running: boolean) => {
     setRunningStates(prev => {
       const next = [...prev];
       next[index] = running;
+      return next;
+    });
+  };
+
+  const handleTPSChange = (index: number, tps: number) => {
+    setTpsStates(prev => {
+      const next = [...prev];
+      next[index] = tps;
       return next;
     });
   };
@@ -290,22 +313,29 @@ export default function App() {
               <p className="text-zinc-500 text-lg">High-throughput inference across multi-instance compute clusters.</p>
             </div>
           </div>
-          <button
-            onClick={handleToggleAll}
-            className={`flex items-center gap-2 px-8 py-3 rounded-xl font-bold transition-all shadow-lg active:scale-95 ${
-              anyRunning ? 'bg-red-50 text-red-600' : 'bg-zinc-900 text-white hover:bg-zinc-800'
-            }`}
-          >
-            {anyRunning ? <Square size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
-            {anyRunning ? 'Stop All Instances' : 'Run All Instances'}
-          </button>
+          
+          <div className="flex items-center gap-6 bg-white p-4 rounded-2xl border border-zinc-200 shadow-sm mb-8">
+            <div className="flex flex-col items-center px-6 border-r border-zinc-100">
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">Cluster Throughput</span>
+              <span className="text-3xl font-black text-zinc-900 font-mono">{totalTPS.toFixed(2)} <span className="text-sm font-normal text-zinc-500">TPS</span></span>
+            </div>
+            <button
+              onClick={handleToggleAll}
+              className={`flex items-center gap-2 px-8 py-4 rounded-xl font-bold transition-all shadow-lg active:scale-95 ${
+                anyRunning ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-zinc-900 text-white hover:bg-zinc-800'
+              }`}
+            >
+              {anyRunning ? <Square size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
+              {anyRunning ? 'Stop All Instances' : 'Run All Instances'}
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-4 gap-4">
-          <ChatbotInstance ref={instanceRefs[0]} id={1} name="1 (8080)" onRunningChange={(r) => handleRunningChange(0, r)} />
-          <ChatbotInstance ref={instanceRefs[1]} id={2} name="2 (8081)" onRunningChange={(r) => handleRunningChange(1, r)} />
-          <ChatbotInstance ref={instanceRefs[2]} id={3} name="3 (8082)" onRunningChange={(r) => handleRunningChange(2, r)} />
-          <ChatbotInstance ref={instanceRefs[3]} id={4} name="4 (8083)" onRunningChange={(r) => handleRunningChange(3, r)} />
+          <ChatbotInstance ref={instanceRefs[0]} id={1} name="Instance 1 (Port: 8080)" onRunningChange={(r) => handleRunningChange(0, r)} onTPSChange={(tps) => handleTPSChange(0, tps)} />
+          <ChatbotInstance ref={instanceRefs[1]} id={2} name="Instance 2 (Port: 8081)" onRunningChange={(r) => handleRunningChange(1, r)} onTPSChange={(tps) => handleTPSChange(1, tps)} />
+          <ChatbotInstance ref={instanceRefs[2]} id={3} name="Instance 3 (Port: 8082)" onRunningChange={(r) => handleRunningChange(2, r)} onTPSChange={(tps) => handleTPSChange(2, tps)} />
+          <ChatbotInstance ref={instanceRefs[3]} id={4} name="Instance 4 (Port: 8083)" onRunningChange={(r) => handleRunningChange(3, r)} onTPSChange={(tps) => handleTPSChange(3, tps)} />
         </div>
       </div>
     </div>
