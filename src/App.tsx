@@ -96,23 +96,34 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, onRunningCha
       const data = await res.json();
       
       let modelInfo = '';
+      
+      // Exhaustive check for various API formats
       if (data.models && data.models.length > 0) {
-        modelInfo = data.models[0].id;
-      } else if (data.data && data.data.length > 0) {
-        modelInfo = data.data[0].id;
-      } else if (data.model_path) {
-        modelInfo = data.model_path;
+        modelInfo = data.models[0].id || data.models[0].name || data.models[0];
+      } else if (data.data && Array.isArray(data.data) && data.data.length > 0) {
+        modelInfo = data.data[0].id || data.data[0].name || data.data[0];
       } else if (data.default_generation_settings?.model) {
         modelInfo = data.default_generation_settings.model;
+      } else if (data.model_path) {
+        modelInfo = data.model_path;
+      } else if (data.model) {
+        modelInfo = data.model;
+      } else if (typeof data === 'string') {
+        modelInfo = data;
       }
 
-      if (modelInfo) {
+      if (modelInfo && typeof modelInfo === 'string') {
         const modelName = modelInfo.split('/').pop() || modelInfo;
         setModel(modelName);
+      } else if (modelInfo && typeof modelInfo === 'object') {
+        // Handle cases where it's still an object
+        const maybeName = (modelInfo as any).id || (modelInfo as any).name || 'Unknown';
+        setModel(String(maybeName).split('/').pop() || String(maybeName));
       } else {
         setModel('Unknown');
       }
     } catch (e) {
+      console.error('Error fetching model:', e);
       setModel('Unknown');
     }
   };
@@ -223,8 +234,8 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, onRunningCha
           <img src="https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png" alt="llama.cpp" className="w-16 h-16 object-contain" referrerPolicy="no-referrer" />
           <div className="flex flex-col">
             <h2 className="font-semibold text-sm text-zinc-900 truncate">{name}</h2>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-zinc-500 font-mono bg-zinc-200 px-1.5 py-0.5 rounded">{model}</span>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[10px] text-zinc-500 font-mono bg-zinc-200 px-1.5 py-0.5 rounded border border-zinc-300">Model: {model}</span>
             </div>
           </div>
           <div className="flex items-center gap-1.5 ml-auto">
@@ -293,7 +304,7 @@ export default function App() {
     if (totalTPS > peakTPS) {
       setPeakTPS(totalTPS);
     }
-  }, [totalTPS]);
+  }, [totalTPS, peakTPS]);
 
   const handleRunningChange = (index: number, running: boolean) => {
     setRunningStates(prev => {
