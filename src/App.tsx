@@ -38,15 +38,19 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string }>(({ id, nam
   const autoRunRef = useRef(isAutoRunning);
   useEffect(() => { autoRunRef.current = isAutoRunning; }, [isAutoRunning]);
 
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   useImperativeHandle(ref, () => ({
     start: () => {
       if (status === 'online' && !isAutoRunning) {
+        abortControllerRef.current = new AbortController();
         setChatbots(prev => prev.map(cb => ({ ...cb, currentPromptIndex: 0, messages: [], isGenerating: false })));
         setIsAutoRunning(true);
       }
     },
     stop: () => {
       setIsAutoRunning(false);
+      abortControllerRef.current?.abort();
     },
     isAutoRunning,
     status
@@ -95,6 +99,8 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string }>(({ id, nam
   };
 
   const generateResponse = async (chatbotIndex: number, prompt: string) => {
+    if (!autoRunRef.current) return;
+    
     setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { ...cb, isGenerating: true } : cb));
     const userMsgId = Date.now().toString() + chatbotIndex;
     setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { ...cb, messages: [...cb.messages, { id: userMsgId, role: 'user', content: prompt }] } : cb));
@@ -103,13 +109,16 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string }>(({ id, nam
       const res = await fetch(`/api/chat/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({ prompt }),
+        signal: abortControllerRef.current?.signal
       });
 
       if (!res.ok) throw new Error('Failed to generate');
       
       const data = await res.json();
       
+      if (!autoRunRef.current) return;
+
       const evalCount = data.tokens_predicted || 0;
       const tokensPerSecond = data.timings?.predicted_per_second || 0;
 
@@ -136,7 +145,10 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string }>(({ id, nam
         }
       } : cb));
 
-    } catch (error) {
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        return;
+      }
       console.error(error);
       setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { 
         ...cb, 
@@ -187,7 +199,10 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string }>(({ id, nam
 
   const toggleAutoRun = () => {
     if (!isAutoRunning) {
+      abortControllerRef.current = new AbortController();
       setChatbots(prev => prev.map(cb => ({ ...cb, currentPromptIndex: 0, messages: [] })));
+    } else {
+      abortControllerRef.current?.abort();
     }
     setIsAutoRunning(!isAutoRunning);
   };
