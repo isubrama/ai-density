@@ -29,8 +29,8 @@ services:
     volumes:
       - llama_models:/root/.cache/huggingface
     command: >
-      --hf-repo ${HF_REPO}
-      --hf-file ${HF_FILE}
+      --hf-repo ${HF_REPO_1}
+      --hf-file ${HF_FILE_1}
       --port 8080
       --host 0.0.0.0
     cpuset: "0-31"
@@ -45,8 +45,8 @@ services:
     volumes:
       - llama_models:/root/.cache/huggingface
     command: >
-      --hf-repo ${HF_REPO}
-      --hf-file ${HF_FILE}
+      --hf-repo ${HF_REPO_2}
+      --hf-file ${HF_FILE_2}
       --port 8080
       --host 0.0.0.0
     cpuset: "32-63"
@@ -61,8 +61,8 @@ services:
     volumes:
       - llama_models:/root/.cache/huggingface
     command: >
-      --hf-repo ${HF_REPO}
-      --hf-file ${HF_FILE}
+      --hf-repo ${HF_REPO_3}
+      --hf-file ${HF_FILE_3}
       --port 8080
       --host 0.0.0.0
     cpuset: "64-95"
@@ -77,8 +77,8 @@ services:
     volumes:
       - llama_models:/root/.cache/huggingface
     command: >
-      --hf-repo ${HF_REPO}
-      --hf-file ${HF_FILE}
+      --hf-repo ${HF_REPO_4}
+      --hf-file ${HF_FILE_4}
       --port 8080
       --host 0.0.0.0
     cpuset: "96-127"
