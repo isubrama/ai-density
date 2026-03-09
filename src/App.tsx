@@ -16,7 +16,7 @@ interface Message {
   };
 }
 
-const ChatbotInstance = forwardRef<any, { id: number, name: string }>(({ id, name }, ref) => {
+const ChatbotInstance = forwardRef<any, { id: number, name: string, onRunningChange?: (running: boolean) => void }>(({ id, name, onRunningChange }, ref) => {
   const [isAutoRunning, setIsAutoRunning] = useState(false);
   const [status, setStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   const [model, setModel] = useState<string>('Loading...');
@@ -36,7 +36,10 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string }>(({ id, nam
   useEffect(() => { chatbotsRef.current = chatbots; }, [chatbots]);
 
   const autoRunRef = useRef(isAutoRunning);
-  useEffect(() => { autoRunRef.current = isAutoRunning; }, [isAutoRunning]);
+  useEffect(() => { 
+    autoRunRef.current = isAutoRunning;
+    onRunningChange?.(isAutoRunning);
+  }, [isAutoRunning, onRunningChange]);
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -184,7 +187,7 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string }>(({ id, nam
       await Promise.all(promises);
 
       if (autoRunRef.current && chatbotsRef.current.some(cb => cb.currentPromptIndex < PROMPTS_PER_INSTANCE[id][cb.id].length)) {
-        timeoutId = setTimeout(runCycle, 300000);
+        timeoutId = setTimeout(runCycle, 1000);
       } else {
         setIsAutoRunning(false);
       }
@@ -257,15 +260,16 @@ export default function App() {
     useRef<any>(null)
   ];
 
-  const [anyRunning, setAnyRunning] = useState(false);
+  const [runningStates, setRunningStates] = useState([false, false, false, false]);
+  const anyRunning = runningStates.some(r => r);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const running = instanceRefs.some(ref => ref.current?.isAutoRunning);
-      setAnyRunning(running);
-    }, 100);
-    return () => clearInterval(interval);
-  }, []);
+  const handleRunningChange = (index: number, running: boolean) => {
+    setRunningStates(prev => {
+      const next = [...prev];
+      next[index] = running;
+      return next;
+    });
+  };
 
   const handleToggleAll = () => {
     if (anyRunning) {
@@ -298,10 +302,10 @@ export default function App() {
         </div>
 
         <div className="grid grid-cols-4 gap-4">
-          <ChatbotInstance ref={instanceRefs[0]} id={1} name="1 (8080)" />
-          <ChatbotInstance ref={instanceRefs[1]} id={2} name="2 (8081)" />
-          <ChatbotInstance ref={instanceRefs[2]} id={3} name="3 (8082)" />
-          <ChatbotInstance ref={instanceRefs[3]} id={4} name="4 (8083)" />
+          <ChatbotInstance ref={instanceRefs[0]} id={1} name="1 (8080)" onRunningChange={(r) => handleRunningChange(0, r)} />
+          <ChatbotInstance ref={instanceRefs[1]} id={2} name="2 (8081)" onRunningChange={(r) => handleRunningChange(1, r)} />
+          <ChatbotInstance ref={instanceRefs[2]} id={3} name="3 (8082)" onRunningChange={(r) => handleRunningChange(2, r)} />
+          <ChatbotInstance ref={instanceRefs[3]} id={4} name="4 (8083)" onRunningChange={(r) => handleRunningChange(3, r)} />
         </div>
       </div>
     </div>
