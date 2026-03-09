@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { Bot, User, Play, Square, Activity, Cpu, Server, Zap, Clock } from 'lucide-react';
 import prompts from './prompts.json';
 
@@ -16,7 +16,7 @@ interface Message {
   };
 }
 
-function ChatbotInstance({ id, name }: { id: number, name: string }) {
+const ChatbotInstance = forwardRef<any, { id: number, name: string }>(({ id, name }, ref) => {
   const [isAutoRunning, setIsAutoRunning] = useState(false);
   const [status, setStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   const [model, setModel] = useState<string>('Loading...');
@@ -32,6 +32,15 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
 
   const messageRefs = useRef<(HTMLDivElement | null)[]>(Array(5).fill(null));
   const promptRefs = useRef<(HTMLDivElement | null)[]>(Array(5).fill(null));
+
+  useImperativeHandle(ref, () => ({
+    start: () => {
+      if (status === 'online' && !isAutoRunning) {
+        setChatbots(prev => prev.map(cb => ({ ...cb, currentPromptIndex: 0, messages: [] })));
+        setIsAutoRunning(true);
+      }
+    }
+  }));
 
   useEffect(() => {
     chatbots.forEach((cb, index) => {
@@ -236,27 +245,47 @@ function ChatbotInstance({ id, name }: { id: number, name: string }) {
       </div>
     </div>
   );
-}
+});
 
 export default function App() {
+  const instanceRefs = [
+    useRef<any>(null),
+    useRef<any>(null),
+    useRef<any>(null),
+    useRef<any>(null)
+  ];
+
+  const handleRunAll = () => {
+    instanceRefs.forEach(ref => {
+      ref.current?.start();
+    });
+  };
+
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900 font-sans p-4 md:p-6">
       <div className="max-w-[1600px] mx-auto">
-        <div className="flex justify-center mb-12">
-          <div className="flex flex-row items-center gap-8">
+        <div className="flex flex-col items-center mb-12">
+          <div className="flex flex-row items-center gap-8 mb-6">
             <img src="https://upload.wikimedia.org/wikipedia/commons/f/f4/Ampere_Computing_LLC_Logo.svg" alt="Ampere Computing Logo" className="w-48 h-48 object-contain" referrerPolicy="no-referrer" />
             <div>
               <h1 className="text-4xl font-bold tracking-tight text-zinc-900 mb-2">High-Density LLM Orchestration on Ampere CPUs</h1>
               <p className="text-zinc-500 text-lg">High-throughput inference across multi-instance compute clusters.</p>
             </div>
           </div>
+          <button
+            onClick={handleRunAll}
+            className="flex items-center gap-2 bg-zinc-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-zinc-800 transition-all shadow-lg active:scale-95"
+          >
+            <Play size={20} fill="currentColor" />
+            Run All Instances
+          </button>
         </div>
 
         <div className="grid grid-cols-4 gap-4">
-          <ChatbotInstance id={1} name="1 (8080)" />
-          <ChatbotInstance id={2} name="2 (8081)" />
-          <ChatbotInstance id={3} name="3 (8082)" />
-          <ChatbotInstance id={4} name="4 (8083)" />
+          <ChatbotInstance ref={instanceRefs[0]} id={1} name="1 (8080)" />
+          <ChatbotInstance ref={instanceRefs[1]} id={2} name="2 (8081)" />
+          <ChatbotInstance ref={instanceRefs[2]} id={3} name="3 (8082)" />
+          <ChatbotInstance ref={instanceRefs[3]} id={4} name="4 (8083)" />
         </div>
       </div>
     </div>
