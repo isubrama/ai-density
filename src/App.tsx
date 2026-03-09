@@ -32,11 +32,16 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string }>(({ id, nam
 
   const messageRefs = useRef<(HTMLDivElement | null)[]>(Array(5).fill(null));
   const promptRefs = useRef<(HTMLDivElement | null)[]>(Array(5).fill(null));
+  const chatbotsRef = useRef(chatbots);
+  useEffect(() => { chatbotsRef.current = chatbots; }, [chatbots]);
+
+  const autoRunRef = useRef(isAutoRunning);
+  useEffect(() => { autoRunRef.current = isAutoRunning; }, [isAutoRunning]);
 
   useImperativeHandle(ref, () => ({
     start: () => {
       if (status === 'online' && !isAutoRunning) {
-        setChatbots(prev => prev.map(cb => ({ ...cb, currentPromptIndex: 0, messages: [] })));
+        setChatbots(prev => prev.map(cb => ({ ...cb, currentPromptIndex: 0, messages: [], isGenerating: false })));
         setIsAutoRunning(true);
       }
     },
@@ -57,9 +62,6 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string }>(({ id, nam
       }
     });
   }, [chatbots]);
-
-  const autoRunRef = useRef(isAutoRunning);
-  useEffect(() => { autoRunRef.current = isAutoRunning; }, [isAutoRunning]);
 
   useEffect(() => {
     checkStatus();
@@ -82,8 +84,6 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string }>(({ id, nam
     try {
       const res = await fetch(`/api/models/${id}`);
       const data = await res.json();
-      // Assuming llama.cpp returns { "models": [ { "id": "..." } ] }
-      // Let's try to get the first model's ID.
       if (data.models && data.models.length > 0) {
         setModel(data.models[0].id);
       } else {
@@ -157,19 +157,21 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string }>(({ id, nam
     const runCycle = async () => {
       if (!autoRunRef.current) return;
 
-      const promises = chatbots.map(async (cb, index) => {
+      const promises = chatbotsRef.current.map(async (cb, index) => {
         const chatbotPrompts = PROMPTS_PER_INSTANCE[id][index];
         if (cb.isGenerating || cb.currentPromptIndex >= chatbotPrompts.length) return;
         
         const prompt = chatbotPrompts[cb.currentPromptIndex];
         await generateResponse(index, prompt);
         
+        if (!autoRunRef.current) return;
+
         setChatbots(prev => prev.map((c, i) => i === index ? { ...c, currentPromptIndex: c.currentPromptIndex + 1 } : c));
       });
 
       await Promise.all(promises);
 
-      if (autoRunRef.current && chatbots.some(cb => cb.currentPromptIndex < PROMPTS_PER_INSTANCE[id][cb.id].length)) {
+      if (autoRunRef.current && chatbotsRef.current.some(cb => cb.currentPromptIndex < PROMPTS_PER_INSTANCE[id][cb.id].length)) {
         timeoutId = setTimeout(runCycle, 300000);
       } else {
         setIsAutoRunning(false);
@@ -181,11 +183,10 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string }>(({ id, nam
     }
 
     return () => clearTimeout(timeoutId);
-  }, [isAutoRunning, chatbots, id]);
+  }, [isAutoRunning, id]);
 
   const toggleAutoRun = () => {
     if (!isAutoRunning) {
-      // Starting a new run, reset indices and messages
       setChatbots(prev => prev.map(cb => ({ ...cb, currentPromptIndex: 0, messages: [] })));
     }
     setIsAutoRunning(!isAutoRunning);
