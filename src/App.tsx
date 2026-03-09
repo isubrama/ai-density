@@ -197,16 +197,6 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string }>(({ id, nam
     return () => clearTimeout(timeoutId);
   }, [isAutoRunning, id]);
 
-  const toggleAutoRun = () => {
-    if (!isAutoRunning) {
-      abortControllerRef.current = new AbortController();
-      setChatbots(prev => prev.map(cb => ({ ...cb, currentPromptIndex: 0, messages: [] })));
-    } else {
-      abortControllerRef.current?.abort();
-    }
-    setIsAutoRunning(!isAutoRunning);
-  };
-
   return (
     <div className="bg-white border border-zinc-200 rounded-xl shadow-sm flex flex-col h-[1100px] overflow-hidden">
       <div className="p-4 border-b border-zinc-100 bg-zinc-50 flex items-center justify-between">
@@ -221,15 +211,6 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string }>(({ id, nam
             <span className="text-[10px] font-semibold text-zinc-500 uppercase">{status}</span>
           </div>
         </div>
-        <button
-          onClick={toggleAutoRun}
-          disabled={status !== 'online'}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-            isAutoRunning ? 'bg-red-50 text-red-600' : 'bg-zinc-900 text-white'
-          }`}
-        >
-          {isAutoRunning ? 'Stop' : 'Run'}
-        </button>
       </div>
       
       <div className="px-4 py-2 bg-zinc-100 text-[10px] font-mono text-zinc-600 border-b border-zinc-200">
