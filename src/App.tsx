@@ -272,7 +272,7 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
                 {cb.messages.filter(m => m.role === 'user').slice(-1).map(msg => (
                   <div key={msg.id} className="text-[11px] text-zinc-400 italic flex gap-1.5 group/prompt">
                     <User size={10} className="mt-0.5 text-zinc-600 shrink-0" />
-                    <span className="truncate cursor-help" title={msg.content}>{msg.content}</span>
+                    <span className="truncate" title={msg.content}>{msg.content}</span>
                   </div>
                 ))}
               </div>
