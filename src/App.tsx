@@ -76,7 +76,7 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
   useEffect(() => {
     checkStatus();
     fetchModel();
-    const interval = setInterval(checkStatus, 5000);
+    const interval = setInterval(checkStatus, 2000);
     return () => clearInterval(interval);
   }, [id]);
 
