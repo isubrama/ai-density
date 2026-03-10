@@ -7,150 +7,150 @@
   },
   "1": {
     "0": [
-      "Explain the theory of relativity in simple terms.",
-      "What is the speed of light?",
-      "How does gravity work?",
-      "What is a black hole?",
-      "Explain time dilation."
+      "Draft a standard non-disclosure agreement (NDA) for a software partnership.",
+      "What are the fiduciary duties of a board member in a Delaware corporation?",
+      "Explain the key differences between a Master Service Agreement (MSA) and a Statement of Work (SOW).",
+      "How should a company handle a breach of contract regarding intellectual property?",
+      "What are the legal implications of 'force majeure' clauses in modern supply contracts?"
     ],
     "1": [
-      "What is the capital of France?",
-      "Who wrote Hamlet?",
-      "What is the largest planet?",
-      "How many continents are there?",
-      "What is the chemical symbol for water?"
+      "Provide a checklist for GDPR compliance regarding user data deletion requests.",
+      "How does the CCPA differ from the GDPR in terms of 'right to opt-out'?",
+      "What are the mandatory reporting requirements for a HIPAA data breach?",
+      "Explain the requirements for achieving SOC 2 Type II compliance.",
+      "What legal safeguards are required for cross-border data transfers to non-EU countries?"
     ],
     "2": [
-      "Explain photosynthesis.",
-      "What is DNA?",
-      "How do vaccines work?",
-      "What is the function of the heart?",
-      "What is the human brain's main function?"
+      "How should an enterprise implement a risk-based approach to internal audits?",
+      "Draft a corporate policy for managing third-party vendor legal risks.",
+      "What are the best practices for documenting a corporate compliance program for DOJ review?",
+      "Explain the 'Business Judgment Rule' and how it protects corporate executives.",
+      "How can a company legally mitigate the risks associated with whistle-blower complaints?"
     ],
     "3": [
-      "What is the history of the internet?",
-      "Who invented the telephone?",
-      "What was the first computer?",
-      "What is artificial intelligence?",
-      "How does a transistor work?"
+      "What are the legal requirements for employee background checks in the United States?",
+      "Explain the difference between an 'exempt' and 'non-exempt' employee under the FLSA.",
+      "How should a company handle a legal claim of workplace discrimination?",
+      "What are the legal considerations for implementing a 'bring your own device' (BYOD) policy?",
+      "Draft a summary of the WARN Act requirements for large-scale layoffs."
     ],
     "4": [
-      "Explain how a blockchain works.",
-      "What is the difference between SQL and NoSQL?",
-      "What is cloud computing?",
-      "How does a load balancer work?",
-      "What is a microservice architecture?"
+      "What is the legal process for patenting a new software algorithm?",
+      "How can a company protect its 'trade secrets' under the Defend Trade Secrets Act (DTSA)?",
+      "Explain the legal doctrine of 'fair use' in the context of corporate marketing.",
+      "What are the risks of using open-source software in a proprietary commercial product?",
+      "How should a company respond to a trademark infringement 'cease and desist' letter?"
     ]
   },
   "2": {
     "0": [
-      "Write a short poem about a robot learning to love.",
-      "Write a haiku about technology.",
-      "Write a story about a futuristic city.",
-      "Describe a world without internet.",
-      "Write a dialogue between two AI."
+      "Analyze the common tactics used by APT groups in financial sector targeting.",
+      "What are the latest Indicators of Compromise (IoCs) for the LockBit ransomware variant?",
+      "How can a security team distinguish between a false positive and a sophisticated slow-brute-force attack?",
+      "Evaluate the effectiveness of STIX/TAXII protocols for real-time threat sharing.",
+      "What role does OSINT play in proactive threat hunting for enterprise environments?"
     ],
     "1": [
-      "What is the best way to learn a new language?",
-      "How do you improve memory?",
-      "What are the benefits of reading?",
-      "How does sleep affect learning?",
-      "What is critical thinking?"
+      "Design a high-level Zero Trust architecture for a hybrid cloud environment.",
+      "What are the security implications of implementing micro-segmentation in a flat network?",
+      "Compare the security benefits of WireGuard vs. traditional IPsec VPNs for remote work.",
+      "How can an enterprise effectively mitigate Distributed Denial of Service (DDoS) at the application layer?",
+      "What are the best practices for securing an industrial control system (ICS) from external network threats?"
     ],
     "2": [
-      "What is the importance of art?",
-      "How does music affect the brain?",
-      "What is the role of architecture?",
-      "How does film influence culture?",
-      "What is the purpose of literature?"
+      "What are the top 3 vulnerabilities in the current OWASP Top 10, and how do we remediate them?",
+      "Explain the risks of 'Insecure Deserialization' in modern web applications.",
+      "How should a DevSecOps pipeline handle secrets management for containerized deployments?",
+      "What are the security trade-offs between using a Web Application Firewall (WAF) vs. RASP?",
+      "Perform a security review of an OAuth 2.0 implementation focusing on redirect URI validation."
     ],
     "3": [
-      "What is the future of space exploration?",
-      "How do we colonize Mars?",
-      "What are the challenges of space travel?",
-      "What is the search for extraterrestrial life?",
-      "What is the importance of space research?"
+      "Outline the first 4 hours of an incident response plan for a suspected SQL injection breach.",
+      "How do you perform memory forensics to detect fileless malware on a Windows server?",
+      "What is the 'Diamond Model' of intrusion analysis and how is it used in forensics?",
+      "Explain the legal and technical challenges of 'active defense' or 'hacking back' during an incident.",
+      "How should a company manage public communications after a confirmed data exfiltration event?"
     ],
     "4": [
-      "Explain the concept of time travel in fiction.",
-      "What is the Fermi paradox?",
-      "How do we detect exoplanets?",
-      "What is dark matter?",
-      "What is the Big Bang theory?"
+      "Compare Role-Based Access Control (RBAC) and Attribute-Based Access Control (ABAC) for a large enterprise.",
+      "What are the security risks associated with 'Shadow IT' and unauthorized SaaS usage?",
+      "How does FIDO2/WebAuthn provide protection against sophisticated phishing attacks?",
+      "Draft a policy for 'privileged access management' (PAM) for cloud infrastructure admins.",
+      "Explain the concept of 'Least Privilege' in the context of microservices communicating via service mesh."
     ]
   },
   "3": {
     "0": [
-      "What are the main differences between classical and quantum computing?",
-      "What is a qubit?",
-      "Explain quantum entanglement.",
-      "How does quantum computing change cryptography?",
-      "What is the future of quantum computing?"
+      "Explain the impact of 'latency arbitrage' on high-frequency trading (HFT) strategies.",
+      "How do market makers use machine learning to optimize their bid-ask spreads?",
+      "What are the risks of 'flash crashes' in markets dominated by algorithmic execution?",
+      "Evaluate the use of FPGA hardware for accelerating trade execution pipelines.",
+      "How do order-routing algorithms handle 'dark pool' liquidity vs. public exchanges?"
     ],
     "1": [
-      "What is the impact of climate change?",
-      "How can we reduce carbon emissions?",
-      "What are the effects of global warming?",
-      "What is renewable energy?",
-      "What is sustainable development?"
+      "Analyze the security risks of 'Flash Loans' in Decentralized Finance (DeFi).",
+      "How do Layer 2 scaling solutions like Optimistic Rollups impact Ethereum's security model?",
+      "What are the regulatory challenges of implementing 'Know Your Customer' (KYC) on a public blockchain?",
+      "Explain the 'Proof of Stake' (PoS) consensus mechanism and its vulnerability to 51% attacks.",
+      "How do Central Bank Digital Currencies (CBDCs) differ from private stablecoins like USDC?"
     ],
     "2": [
-      "What is the role of ethics in technology?",
-      "How does AI impact privacy?",
-      "What is the future of work?",
-      "How does technology affect social interaction?",
-      "What is the digital divide?"
+      "What are the implications of Basel III capital requirements for mid-sized commercial banks?",
+      "Explain the 'Anti-Money Laundering' (AML) reporting requirements under the Bank Secrecy Act.",
+      "How does the 'Volcker Rule' restrict proprietary trading by commercial banking entities?",
+      "What are the 'Stress Testing' requirements for Systemically Important Financial Institutions (SIFIs)?",
+      "Compare the regulatory approach to fintech in the EU (PSD2) vs. the United States."
     ],
     "3": [
-      "What is the importance of biodiversity?",
-      "How do ecosystems work?",
-      "What is the impact of deforestation?",
-      "What is conservation biology?",
-      "How can we protect endangered species?"
+      "Calculate the Value at Risk (VaR) for a portfolio of European call options using Monte Carlo simulation.",
+      "How do 'Risk Parity' strategies perform during periods of rising interest rates and inflation?",
+      "Explain the 'Black-Litterman' model and how it improves upon Mean-Variance Optimization.",
+      "What are 'Greeks' in option pricing, and how do they help in hedging delta and gamma risk?",
+      "Analyze the correlation between credit default swaps (CDS) and corporate bond spreads."
     ],
     "4": [
-      "What is the future of urban planning?",
-      "How do smart cities work?",
-      "What are the benefits of public transportation?",
-      "How can we improve urban air quality?",
-      "What is the importance of green spaces?"
+      "Design a corporate cash-pooling strategy for a multinational company operating in 10 currencies.",
+      "How should a corporate treasury manage interest rate risk using cross-currency swaps?",
+      "What are the pros and cons of using a 'Supply Chain Finance' program to optimize working capital?",
+      "Explain the role of 'Commercial Paper' in a company's short-term funding strategy.",
+      "How do companies use 'Earnings at Risk' (EaR) to communicate financial volatility to investors?"
     ]
   },
   "4": {
     "0": [
-      "Describe a futuristic city powered entirely by renewable energy.",
-      "How can we achieve carbon neutrality?",
-      "What are the benefits of solar energy?",
-      "Explain the importance of wind energy.",
-      "How does a smart grid work?"
+      "How can 'last-mile' delivery be optimized using dynamic routing and micro-fulfillment centers?",
+      "Analyze the impact of 'cross-docking' on reducing warehouse handling costs.",
+      "Evaluate the use of autonomous mobile robots (AMRs) in a high-volume distribution center.",
+      "How do 'Digital Twins' help in simulating and optimizing global supply chain flows?",
+      "What are the best practices for reducing the 'Carbon Footprint' of a global maritime logistics network?"
     ],
     "1": [
-      "What is the history of mathematics?",
-      "Who invented calculus?",
-      "What is the importance of statistics?",
-      "How do we use geometry in daily life?",
-      "What is the beauty of prime numbers?"
+      "Explain the 5S methodology and its role in creating a 'Lean' manufacturing environment.",
+      "How does 'Six Sigma' reduce defects through the DMAIC (Define, Measure, Analyze, Improve, Control) process?",
+      "What is 'Value Stream Mapping' and how is it used to identify operational waste?",
+      "Compare 'Total Productive Maintenance' (TPM) and 'Reliability Centered Maintenance' (RCM).",
+      "How can 'Kaizen' events be used to drive continuous improvement on a factory floor?"
     ],
     "2": [
-      "What is the philosophy of happiness?",
-      "How do we define success?",
-      "What is the meaning of life?",
-      "How does stoicism help in modern life?",
-      "What is the importance of mindfulness?"
+      "What are the risks of a 'Just-in-Time' (JIT) inventory strategy during global geopolitical instability?",
+      "How do you calculate the 'Economic Order Quantity' (EOQ) while considering variable lead times?",
+      "Explain the 'Bullwhip Effect' and how better data sharing can mitigate its impact.",
+      "What is 'Safety Stock' and how is it determined using service level targets?",
+      "Analyze the benefits of 'Vendor Managed Inventory' (VMI) for both suppliers and retailers."
     ],
     "3": [
-      "What is the future of medicine?",
-      "How does gene editing work?",
-      "What is the role of nanotechnology in medicine?",
-      "How do vaccines eradicate diseases?",
-      "What is the importance of personalized medicine?"
+      "How can a company identify and mitigate 'Single Points of Failure' in its global sourcing strategy?",
+      "Design a 'Business Continuity Plan' (BCP) for a manufacturing plant in a high-risk natural disaster zone.",
+      "What role does 'Predictive Analytics' play in anticipating supply chain disruptions?",
+      "How should an enterprise balance 'Efficiency' vs. 'Resilience' in its operational design?",
+      "Explain the 'Theory of Constraints' (ToC) and how to manage bottlenecks in a production line."
     ],
     "4": [
-      "What is the impact of social media on society?",
-      "How does misinformation spread?",
-      "What is the role of journalism in democracy?",
-      "How can we promote media literacy?",
-      "What is the future of communication?"
+      "What are the criteria for selecting a 'Strategic Supplier' for a mission-critical component?",
+      "How can 'Total Cost of Ownership' (TCO) analysis improve procurement decision-making?",
+      "Draft a 'Supplier Code of Conduct' focusing on environmental and social governance (ESG).",
+      "What are the risks and benefits of 'Dual Sourcing' vs. 'Single Sourcing'?",
+      "How do 'e-Procurement' systems improve transparency and reduce 'maverick spending'?"
     ]
   }
 }
