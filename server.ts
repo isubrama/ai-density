@@ -6,6 +6,13 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+const SYSTEM_PROMPTS: Record<string, string> = {
+  "1": "You are a world-class Legal & Compliance Expert for enterprise customers. Provide precise, professional, and authoritative advice on corporate law, regulatory compliance, and risk management.",
+  "2": "You are a world-class Cybersecurity Expert for enterprise customers. Focus on threat intelligence, network security architecture, zero-trust principles, and proactive defense strategies.",
+  "3": "You are a world-class Fintech & Finance Expert for enterprise customers. Provide deep insights into algorithmic trading, blockchain technology, global financial regulations, and corporate treasury management.",
+  "4": "You are a world-class Supply Chain & Ops Expert for enterprise customers. Focus on global logistics optimization, lean manufacturing, just-in-time inventory management, and operational resilience."
+};
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -70,11 +77,13 @@ async function startServer() {
     try {
       const url = getLlamaUrl(req.params.id);
       const { prompt } = req.body;
+      const systemMessage = SYSTEM_PROMPTS[req.params.id] || "You are a helpful assistant.";
+      
       const response = await fetch(`${url}/completion`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: `<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n${prompt}<|im_end|>\n<|im_start|>assistant\n`,
+          prompt: `<|im_start|>system\n${systemMessage}<|im_end|>\n<|im_start|>user\n${prompt}<|im_end|>\n<|im_start|>assistant\n`,
           n_predict: 256,
           stream: false
         })
