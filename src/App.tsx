@@ -223,19 +223,21 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
   return (
     <div className="bg-[#121214] border border-zinc-800/50 rounded-2xl shadow-xl flex flex-col h-[1050px] overflow-hidden transition-all hover:border-zinc-700/80 group">
       <div className="p-5 border-b border-zinc-800/80 bg-[#161618]/50 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 group-hover:bg-indigo-500/20 transition-all">
+        <div className="flex items-center gap-4 overflow-hidden">
+          <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 group-hover:bg-indigo-500/20 transition-all shrink-0">
             {getInstanceIcon()}
           </div>
-          <div className="flex flex-col">
-            <h2 className="font-bold text-sm text-zinc-100 tracking-tight leading-none mb-1.5">{name}</h2>
-            <div className="flex items-center gap-2">
-              <span className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest border border-zinc-800 px-1.5 py-0.5 rounded bg-zinc-900/50">Port: {port}</span>
-              <span className="text-[10px] text-indigo-300 font-mono truncate max-w-[120px]">{model}</span>
+          <div className="flex flex-col overflow-hidden">
+            <h2 className="font-bold text-sm text-zinc-100 tracking-tight leading-none mb-1.5 truncate">{name}</h2>
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] text-indigo-300 font-mono truncate leading-tight" title={model}>
+                <span className="text-zinc-600 mr-1">Model:</span>{model}
+              </span>
+              <span className="text-[8px] text-zinc-500 font-mono uppercase tracking-widest border border-zinc-800/50 px-1 py-0.5 rounded bg-zinc-900/30 w-fit">Port: {port}</span>
             </div>
           </div>
         </div>
-        <div className="flex flex-col items-end gap-1.5">
+        <div className="flex flex-col items-end gap-1.5 shrink-0 ml-2">
           <div className="flex items-center gap-1.5">
             <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${status === 'online' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : status === 'checking' ? 'bg-amber-500' : 'bg-red-500'}`}></div>
             <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-tighter">{status}</span>
@@ -350,7 +352,7 @@ export default function App() {
                 LLM <span className="text-indigo-500 italic">Orchestrator</span>
               </h1>
               <p className="text-zinc-500 text-sm font-medium tracking-wide">
-                High-Density Enterprise Inference <span className="text-zinc-700 mx-2">|</span> Powered by Ampere® Cloud-Native CPUs
+                High-Density Enterprise Inference <span className="text-zinc-700 mx-2">|</span> Powered by AmpereOne® M CPUs
               </p>
             </div>
           </div>
@@ -412,7 +414,7 @@ export default function App() {
               }`}
             >
               {anyRunning ? <Square size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" />}
-              <span className="text-lg">{anyRunning ? 'Kill Orchestration' : 'Init Core Cluster'}</span>
+              <span className="text-lg">{anyRunning ? 'Stop Cluster' : 'Start Cluster'}</span>
               <div className={`absolute -inset-1 rounded-[18px] opacity-0 blur group-hover:opacity-30 transition-all ${anyRunning ? 'bg-red-500' : 'bg-indigo-500'}`}></div>
             </button>
           </div>
