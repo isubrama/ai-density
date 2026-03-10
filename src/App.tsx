@@ -16,7 +16,7 @@ interface Message {
   };
 }
 
-const ChatbotInstance = forwardRef<any, { id: number, name: string, onRunningChange?: (running: boolean) => void, onTPSChange?: (tps: number) => void }>(({ id, name, onRunningChange, onTPSChange }, ref) => {
+const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number, onRunningChange?: (running: boolean) => void, onTPSChange?: (tps: number) => void }>(({ id, name, port, onRunningChange, onTPSChange }, ref) => {
   const [isAutoRunning, setIsAutoRunning] = useState(false);
   const [status, setStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   const [model, setModel] = useState<string>('Loading...');
@@ -233,12 +233,13 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, onRunningCha
         <div className="flex items-center gap-3">
           <img src="https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png" alt="llama.cpp" className="w-16 h-16 object-contain" referrerPolicy="no-referrer" />
           <div className="flex flex-col">
-            <h2 className="font-semibold text-sm text-zinc-900 truncate">{name}</h2>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-[10px] text-zinc-500 font-mono bg-zinc-200 px-1.5 py-0.5 rounded border border-zinc-300">Model: {model}</span>
+            <h2 className="font-semibold text-sm text-zinc-900 truncate leading-tight">{name}</h2>
+            <div className="flex flex-col gap-1 mt-1">
+              <span className="text-[9px] text-zinc-400 font-mono uppercase tracking-tighter">Port: {port}</span>
+              <span className="text-[10px] text-zinc-500 font-mono bg-zinc-200 px-1.5 py-0.5 rounded border border-zinc-300 w-fit">Model: {model}</span>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 ml-auto">
+          <div className="flex items-center gap-1.5 ml-auto self-start mt-1">
             <div className={`w-2 h-2 rounded-full ${status === 'online' ? 'bg-emerald-500' : status === 'checking' ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
             <span className="text-[10px] font-semibold text-zinc-500 uppercase">{status}</span>
           </div>
@@ -364,10 +365,10 @@ export default function App() {
         </div>
 
         <div className="grid grid-cols-4 gap-4">
-          <ChatbotInstance ref={instanceRefs[0]} id={1} name="Instance 1 (Port: 8080)" onRunningChange={(r) => handleRunningChange(0, r)} onTPSChange={(tps) => handleTPSChange(0, tps)} />
-          <ChatbotInstance ref={instanceRefs[1]} id={2} name="Instance 2 (Port: 8081)" onRunningChange={(r) => handleRunningChange(1, r)} onTPSChange={(tps) => handleTPSChange(1, tps)} />
-          <ChatbotInstance ref={instanceRefs[2]} id={3} name="Instance 3 (Port: 8082)" onRunningChange={(r) => handleRunningChange(2, r)} onTPSChange={(tps) => handleTPSChange(2, tps)} />
-          <ChatbotInstance ref={instanceRefs[3]} id={4} name="Instance 4 (Port: 8083)" onRunningChange={(r) => handleRunningChange(3, r)} onTPSChange={(tps) => handleTPSChange(3, tps)} />
+          <ChatbotInstance ref={instanceRefs[0]} id={1} name="Legal & Compliance Expert" port={8080} onRunningChange={(r) => handleRunningChange(0, r)} onTPSChange={(tps) => handleTPSChange(0, tps)} />
+          <ChatbotInstance ref={instanceRefs[1]} id={2} name="Cybersecurity Expert" port={8081} onRunningChange={(r) => handleRunningChange(1, r)} onTPSChange={(tps) => handleTPSChange(1, tps)} />
+          <ChatbotInstance ref={instanceRefs[2]} id={3} name="Fintech & Finance Expert" port={8082} onRunningChange={(r) => handleRunningChange(2, r)} onTPSChange={(tps) => handleTPSChange(2, tps)} />
+          <ChatbotInstance ref={instanceRefs[3]} id={4} name="Supply Chain & Ops Expert" port={8083} onRunningChange={(r) => handleRunningChange(3, r)} onTPSChange={(tps) => handleTPSChange(3, tps)} />
         </div>
       </div>
     </div>
