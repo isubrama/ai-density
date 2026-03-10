@@ -6,12 +6,10 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const SYSTEM_PROMPTS: Record<string, string> = {
-  "1": "You are a world-class Legal & Compliance Expert for enterprise customers. Provide precise, professional, and authoritative advice on corporate law, regulatory compliance, and risk management.",
-  "2": "You are a world-class Cybersecurity Expert for enterprise customers. Focus on threat intelligence, network security architecture, zero-trust principles, and proactive defense strategies.",
-  "3": "You are a world-class Fintech & Finance Expert for enterprise customers. Provide deep insights into algorithmic trading, blockchain technology, global financial regulations, and corporate treasury management.",
-  "4": "You are a world-class Supply Chain & Ops Expert for enterprise customers. Focus on global logistics optimization, lean manufacturing, just-in-time inventory management, and operational resilience."
-};
+// Load prompts from src/prompts.json
+const promptsPath = path.resolve(__dirname, "src/prompts.json");
+const prompts = JSON.parse(fs.readFileSync(promptsPath, "utf8"));
+const SYSTEM_PROMPTS = prompts.system_prompts;
 
 async function startServer() {
   const app = express();
