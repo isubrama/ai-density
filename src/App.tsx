@@ -270,9 +270,9 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
             <div className="flex flex-col flex-1 overflow-hidden">
               <div ref={el => promptRefs.current[index] = el} className="h-10 border-b border-zinc-800/30 overflow-y-auto p-2 bg-zinc-900/20">
                 {cb.messages.filter(m => m.role === 'user').slice(-1).map(msg => (
-                  <div key={msg.id} className="text-[11px] text-zinc-400 italic flex gap-1.5">
+                  <div key={msg.id} className="text-[11px] text-zinc-400 italic flex gap-1.5 group/prompt">
                     <User size={10} className="mt-0.5 text-zinc-600 shrink-0" />
-                    <span className="truncate">{msg.content}</span>
+                    <span className="truncate cursor-help" title={msg.content}>{msg.content}</span>
                   </div>
                 ))}
               </div>
