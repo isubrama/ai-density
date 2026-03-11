@@ -15,6 +15,7 @@ services:
       - llama-net
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
     depends_on:
       - llama-cpp-1
       - llama-cpp-2
