@@ -104,6 +104,7 @@ async function pollStats() {
 
   setInterval(async () => {
     const now = Date.now();
+    console.log(`[BACKEND] --- Broadcast Cycle: ${new Date(now).toLocaleTimeString()} ---`);
     for (let i = 1; i <= 4; i++) {
       const id = i.toString();
       
@@ -124,6 +125,7 @@ async function pollStats() {
         if (deltaTimeUsec > 0 && container.lastUsageUsec > 0) {
           const utilPercent = (deltaUsageUsec / deltaTimeUsec) * 100 / 32.0;
           clusterStats[id].cpu = Math.min(Math.max(utilPercent, 0), 100.0);
+          console.log(`[BACKEND] Instance ${id}: ${clusterStats[id].cpu.toFixed(1)}% (Status: ${clusterStats[id].status})`);
         }
         container.lastUsageUsec = currentUsageUsec;
         container.lastTime = now;
@@ -133,7 +135,7 @@ async function pollStats() {
     // Broadcast to all SSE clients
     const data = JSON.stringify(clusterStats);
     clients.forEach(client => client.res.write(`data: ${data}\n\n`));
-  }, 1000); // SSE updates every 1 second
+  }, 2000); // SSE updates every 2 seconds
 }
 
 async function startServer() {
