@@ -12,8 +12,16 @@ const promptsPath = path.resolve(__dirname, "src/prompts.json");
 const prompts = JSON.parse(fs.readFileSync(promptsPath, "utf8"));
 const SYSTEM_PROMPTS = prompts.system_prompts;
 
-// Global state for CPU usage
-const cpuUsageCache: Record<string, number> = { "1": 0, "2": 0, "3": 0, "4": 0 };
+// Global state for stats
+const clusterStats: Record<string, { cpu: number; status: string }> = {
+  "1": { cpu: 0, status: "checking" },
+  "2": { cpu: 0, status: "checking" },
+  "3": { cpu: 0, status: "checking" },
+  "4": { cpu: 0, status: "checking" }
+};
+
+// SSE Clients
+let clients: any[] = [];
 
 interface ContainerInfo {
   id: string;
@@ -25,7 +33,6 @@ interface ContainerInfo {
 
 const containers: Record<string, ContainerInfo> = {};
 
-// Helper to talk to Docker Socket
 async function dockerApi(path: string) {
   return new Promise<any>((resolve, reject) => {
     const options = { socketPath: "/var/run/docker.sock", path, method: "GET" };
@@ -44,46 +51,39 @@ async function dockerApi(path: string) {
   });
 }
 
-// Identify containers and their cgroup paths
 async function resolveContainers() {
   console.log("[BACKEND] Resolving Docker containers...");
-  const dockerContainers = await dockerApi("/containers/json");
-  for (let i = 1; i <= 4; i++) {
-    const namePattern = `llama-cpp-${i}`;
-    const container = dockerContainers.find((c: any) => 
-      c.Names.some((n: string) => n.includes(namePattern)) || 
-      c.Labels["com.docker.compose.service"] === namePattern
-    );
+  try {
+    const dockerContainers = await dockerApi("/containers/json");
+    for (let i = 1; i <= 4; i++) {
+      const namePattern = `llama-cpp-${i}`;
+      const container = dockerContainers.find((c: any) => 
+        c.Names.some((n: string) => n.includes(namePattern)) || 
+        c.Labels["com.docker.compose.service"] === namePattern
+      );
 
-    if (container) {
-      const details = await dockerApi(`/containers/${container.Id}/json`);
-      const longId = details.Id;
-      
-      const possiblePaths = [
-        `/sys/fs/cgroup/system.slice/docker-${longId}.scope/cpu.stat`,
-        `/sys/fs/cgroup/docker/${longId}/cpu.stat`
-      ];
-
-      let validPath = null;
-      for (const p of possiblePaths) {
-        if (fs.existsSync(p)) {
-          validPath = p;
-          break;
+      if (container) {
+        const details = await dockerApi(`/containers/${container.Id}/json`);
+        const longId = details.Id;
+        const possiblePaths = [
+          `/sys/fs/cgroup/system.slice/docker-${longId}.scope/cpu.stat`,
+          `/sys/fs/cgroup/docker/${longId}/cpu.stat`
+        ];
+        let validPath = null;
+        for (const p of possiblePaths) {
+          if (fs.existsSync(p)) { validPath = p; break; }
         }
+        containers[i.toString()] = {
+          id: i.toString(),
+          longId,
+          cgroupPath: validPath,
+          lastUsageUsec: 0,
+          lastTime: Date.now()
+        };
+        console.log(`[BACKEND] Resolved Instance ${i} -> ${longId.substring(0, 12)}`);
       }
-
-      containers[i.toString()] = {
-        id: i.toString(),
-        longId,
-        cgroupPath: validPath,
-        lastUsageUsec: 0,
-        lastTime: Date.now()
-      };
-      console.log(`[BACKEND] Resolved Instance ${i} -> ${longId.substring(0, 12)} (Path: ${validPath})`);
-    } else {
-      console.warn(`[BACKEND] WARNING: Could not resolve container for Instance ${i}`);
     }
-  }
+  } catch (e) { console.error("[BACKEND] Container resolution failed:", e); }
 }
 
 function readCpuUsage(cgroupPath: string): number {
@@ -91,36 +91,49 @@ function readCpuUsage(cgroupPath: string): number {
     const content = fs.readFileSync(cgroupPath, "utf8");
     const match = content.match(/usage_usec (\d+)/);
     return match ? parseInt(match[1]) : 0;
-  } catch (e) {
-    return 0;
-  }
+  } catch (e) { return 0; }
 }
 
-async function pollCpuStats() {
+const getLlamaUrl = (id: string) => {
+  const envVar = `LLAMA_API_URL_${id}`;
+  return process.env[envVar] || `http://localhost:808${parseInt(id) - 1}`;
+};
+
+async function pollStats() {
   await resolveContainers();
 
-  console.log("[BACKEND] Starting CPU polling loop (5s interval)...");
-  setInterval(() => {
+  setInterval(async () => {
     const now = Date.now();
-    console.log(`[BACKEND] --- Polling Cycle Start (${new Date(now).toLocaleTimeString()}) ---`);
-    for (const id in containers) {
+    for (let i = 1; i <= 4; i++) {
+      const id = i.toString();
+      
+      // Update Status (Health)
+      try {
+        const url = getLlamaUrl(id);
+        const res = await fetch(`${url}/health`, { signal: AbortSignal.timeout(1000) });
+        clusterStats[id].status = res.ok ? "online" : "offline";
+      } catch (e) { clusterStats[id].status = "offline"; }
+
+      // Update CPU
       const container = containers[id];
-      if (!container.cgroupPath) continue;
+      if (container?.cgroupPath) {
+        const currentUsageUsec = readCpuUsage(container.cgroupPath);
+        const deltaTimeUsec = (now - container.lastTime) * 1000;
+        const deltaUsageUsec = currentUsageUsec - container.lastUsageUsec;
 
-      const currentUsageUsec = readCpuUsage(container.cgroupPath);
-      const deltaTimeUsec = (now - container.lastTime) * 1000;
-      const deltaUsageUsec = currentUsageUsec - container.lastUsageUsec;
-
-      if (deltaTimeUsec > 0 && container.lastUsageUsec > 0) {
-        const utilPercent = (deltaUsageUsec / deltaTimeUsec) * 100 / 32.0;
-        cpuUsageCache[id] = Math.min(Math.max(utilPercent, 0), 100.0);
-        console.log(`[BACKEND] Instance ${id} CPU: ${cpuUsageCache[id].toFixed(2)}%`);
+        if (deltaTimeUsec > 0 && container.lastUsageUsec > 0) {
+          const utilPercent = (deltaUsageUsec / deltaTimeUsec) * 100 / 32.0;
+          clusterStats[id].cpu = Math.min(Math.max(utilPercent, 0), 100.0);
+        }
+        container.lastUsageUsec = currentUsageUsec;
+        container.lastTime = now;
       }
-
-      container.lastUsageUsec = currentUsageUsec;
-      container.lastTime = now;
     }
-  }, 5000);
+
+    // Broadcast to all SSE clients
+    const data = JSON.stringify(clusterStats);
+    clients.forEach(client => client.res.write(`data: ${data}\n\n`));
+  }, 1000); // SSE updates every 1 second
 }
 
 async function startServer() {
@@ -129,12 +142,26 @@ async function startServer() {
   app.use(express.json());
 
   console.log("[BACKEND] Server starting...");
-  pollCpuStats().catch(err => console.error("[BACKEND] ERROR: CPU monitoring failed:", err));
+  pollStats().catch(err => console.error("[BACKEND] Stats loop failed:", err));
 
-  const getLlamaUrl = (id: string) => {
-    const envVar = `LLAMA_API_URL_${id}`;
-    return process.env[envVar] || `http://localhost:808${parseInt(id) - 1}`;
-  };
+  // SSE Endpoint
+  app.get("/api/stats-stream", (req, res) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+
+    const clientId = Date.now();
+    const newClient = { id: clientId, res };
+    clients.push(newClient);
+
+    // Send initial data immediately
+    res.write(`data: ${JSON.stringify(clusterStats)}\n\n`);
+
+    req.on("close", () => {
+      clients = clients.filter(c => c.id !== clientId);
+    });
+  });
 
   app.get("/api/models/:id", async (req, res) => {
     try {
@@ -147,28 +174,10 @@ async function startServer() {
         } catch (e) {}
       }
       res.status(404).json({ error: "Not found" });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.get("/api/status/:id", async (req, res) => {
-    console.log(`[BACKEND] API: Status request for Instance ${req.params.id}`);
-    try {
-      const url = getLlamaUrl(req.params.id);
-      const response = await fetch(`${url}/health`);
-      const data = response.ok ? await response.json() : { status: "offline" };
-      res.json({ 
-        status: data.status === "ok" ? "online" : "offline",
-        cpu_usage: cpuUsageCache[req.params.id] || 0
-      });
-    } catch (error: any) {
-      res.json({ status: "offline", cpu_usage: 0 });
-    }
+    } catch (error: any) { res.status(500).json({ error: error.message }); }
   });
 
   app.post("/api/chat/:id", async (req, res) => {
-    console.log(`[BACKEND] API: Chat request for Instance ${req.params.id}`);
     try {
       const url = getLlamaUrl(req.params.id);
       const { prompt } = req.body;
@@ -183,9 +192,7 @@ async function startServer() {
         })
       });
       res.json(await response.json());
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
+    } catch (error: any) { res.status(500).json({ error: error.message }); }
   });
 
   if (process.env.NODE_ENV !== "production") {

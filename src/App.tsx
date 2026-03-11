@@ -16,11 +16,17 @@ interface Message {
   };
 }
 
-const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number, onRunningChange?: (running: boolean) => void, onTPSChange?: (tps: number) => void }>(({ id, name, port, onRunningChange, onTPSChange }, ref) => {
+const ChatbotInstance = forwardRef<any, { 
+  id: number, 
+  name: string, 
+  port: number, 
+  status: string,
+  cpuUsage: number,
+  onRunningChange?: (running: boolean) => void, 
+  onTPSChange?: (tps: number) => void 
+}>(({ id, name, port, status, cpuUsage, onRunningChange, onTPSChange }, ref) => {
   const [isAutoRunning, setIsAutoRunning] = useState(false);
-  const [status, setStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   const [model, setModel] = useState<string>('Loading...');
-  const [cpuUsage, setCpuUsage] = useState(0);
   
   const [chatbots, setChatbots] = useState(Array.from({ length: 5 }, (_, i) => ({
     id: i,
@@ -74,23 +80,8 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
   }, [chatbots, onTPSChange]);
 
   useEffect(() => {
-    checkStatus();
     fetchModel();
-    const interval = setInterval(checkStatus, 5000);
-    return () => clearInterval(interval);
   }, [id]);
-
-  const checkStatus = async () => {
-    try {
-      const res = await fetch(`/api/status/${id}`);
-      const data = await res.json();
-      setStatus(data.status);
-      setCpuUsage(data.cpu_usage || 0);
-    } catch (e) {
-      setStatus('offline');
-      setCpuUsage(0);
-    }
-  };
 
   const fetchModel = async () => {
     try {
@@ -325,6 +316,30 @@ export default function App() {
   const [tpsStates, setTpsStates] = useState([0, 0, 0, 0]);
   const [peakTPS, setPeakTPS] = useState(0);
   
+  const [clusterData, setClusterData] = useState<Record<string, { cpu: number; status: string }>>({
+    "1": { cpu: 0, status: "checking" },
+    "2": { cpu: 0, status: "checking" },
+    "3": { cpu: 0, status: "checking" },
+    "4": { cpu: 0, status: "checking" }
+  });
+
+  // SSE Implementation
+  useEffect(() => {
+    const eventSource = new EventSource('/api/stats-stream');
+    
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      setClusterData(data);
+    };
+
+    eventSource.onerror = (err) => {
+      console.error("SSE Connection failed:", err);
+      eventSource.close();
+    };
+
+    return () => eventSource.close();
+  }, []);
+
   const anyRunning = runningStates.some(r => r);
   const totalTPS = tpsStates.reduce((acc, tps) => acc + tps, 0);
 
@@ -441,10 +456,46 @@ export default function App() {
         </section>
 
         <main className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <ChatbotInstance ref={instanceRefs[0]} id={1} name="Legal & Compliance Expert" port={8080} onRunningChange={(r) => handleRunningChange(0, r)} onTPSChange={(tps) => handleTPSChange(0, tps)} />
-          <ChatbotInstance ref={instanceRefs[1]} id={2} name="Cybersecurity Expert" port={8081} onRunningChange={(r) => handleRunningChange(1, r)} onTPSChange={(tps) => handleTPSChange(1, tps)} />
-          <ChatbotInstance ref={instanceRefs[2]} id={3} name="Fintech & Finance Expert" port={8082} onRunningChange={(r) => handleRunningChange(2, r)} onTPSChange={(tps) => handleTPSChange(2, tps)} />
-          <ChatbotInstance ref={instanceRefs[3]} id={4} name="Supply Chain & Ops Expert" port={8083} onRunningChange={(r) => handleRunningChange(3, r)} onTPSChange={(tps) => handleTPSChange(3, tps)} />
+          <ChatbotInstance 
+            ref={instanceRefs[0]} 
+            id={1} 
+            name="Legal & Compliance Expert" 
+            port={8080} 
+            status={clusterData["1"].status}
+            cpuUsage={clusterData["1"].cpu}
+            onRunningChange={(r) => handleRunningChange(0, r)} 
+            onTPSChange={(tps) => handleTPSChange(0, tps)} 
+          />
+          <ChatbotInstance 
+            ref={instanceRefs[1]} 
+            id={2} 
+            name="Cybersecurity Expert" 
+            port={8081} 
+            status={clusterData["2"].status}
+            cpuUsage={clusterData["2"].cpu}
+            onRunningChange={(r) => handleRunningChange(1, r)} 
+            onTPSChange={(tps) => handleTPSChange(1, tps)} 
+          />
+          <ChatbotInstance 
+            ref={instanceRefs[2]} 
+            id={3} 
+            name="Fintech & Finance Expert" 
+            port={8082} 
+            status={clusterData["3"].status}
+            cpuUsage={clusterData["3"].cpu}
+            onRunningChange={(r) => handleRunningChange(2, r)} 
+            onTPSChange={(tps) => handleTPSChange(2, tps)} 
+          />
+          <ChatbotInstance 
+            ref={instanceRefs[3]} 
+            id={4} 
+            name="Supply Chain & Ops Expert" 
+            port={8083} 
+            status={clusterData["4"].status}
+            cpuUsage={clusterData["4"].cpu}
+            onRunningChange={(r) => handleRunningChange(3, r)} 
+            onTPSChange={(tps) => handleTPSChange(3, tps)} 
+          />
         </main>
 
         <footer className="mt-20 border-t border-zinc-800/50 pt-10 text-center">
