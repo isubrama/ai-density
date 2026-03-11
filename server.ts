@@ -118,7 +118,7 @@ async function pollCpuStats() {
       container.lastUsageUsec = currentUsageUsec;
       container.lastTime = now;
     }
-  }, 1000); // Fast 1s polling via direct file reads
+  }, 5000); // 5s polling for smoother averaging
 }
 
 async function startServer() {
