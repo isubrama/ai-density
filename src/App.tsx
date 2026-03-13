@@ -361,7 +361,7 @@ export default function App() {
             <div className="relative">
               <div className="absolute inset-0 bg-indigo-500 blur-[80px] opacity-20 animate-pulse"></div>
               <img 
-                src="https://upload.wikimedia.org/wikipedia/commons/f/f4/Ampere_Computing_LLC_Logo.svg" 
+                src="/ampere-logo.svg" 
                 alt="Ampere Logo" 
                 className="w-48 h-12 relative grayscale brightness-200"
               />
@@ -369,7 +369,7 @@ export default function App() {
             <div className="h-12 w-px bg-zinc-800 hidden md:block"></div>
             <div className="flex flex-col">
               <h1 className="text-3xl font-black tracking-tight text-white mb-2 uppercase">
-                LLM <span className="text-indigo-500 italic">Orchestrator</span>
+                LLM <span className="italic" style={{ color: '#F83821' }}>Orchestrator</span>
               </h1>
               <p className="text-zinc-500 text-sm font-medium tracking-wide">
                 High-Density Enterprise Inference <span className="text-zinc-700 mx-2">|</span> Powered by AmpereOne® M CPUs

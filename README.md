@@ -1,12 +1,12 @@
 # Ampere LLM Orchestrator
 
 <div align="center">
-<img width="400" alt="Ampere Logo" src="https://upload.wikimedia.org/wikipedia/commons/f/f4/Ampere_Computing_LLC_Logo.svg" />
+<img width="400" alt="Ampere Logo" src="./public/ampere-logo.svg" />
 </div>
 
 ## Overview
 
-The **Ampere LLM Orchestrator** is a high-performance, high-density platform designed for orchestrating and monitoring multiple Large Language Model (LLM) instances on **AmpereOne® M Cloud-Native CPUs**.
+The **Ampere LLM Orchestrator** is a high-performance, high-density platform designed for orchestrating and monitoring multiple Large Language Model (LLM) instances on **AmpereOne® M CPUs**.
 
 By leveraging the high core-count architecture of Ampere processors, this application achieves extreme throughput and density, running multiple independent `llama.cpp` servers concurrently—each isolated and pinned to specific **32-core segments** for deterministic performance.
 
