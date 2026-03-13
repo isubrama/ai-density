@@ -126,7 +126,10 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
     
     setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { ...cb, isGenerating: true } : cb));
     const userMsgId = Date.now().toString() + chatbotIndex;
-    setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { ...cb, messages: [...cb.messages, { id: userMsgId, role: 'user', content: prompt }] } : cb));
+    setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { 
+      ...cb, 
+      messages: [...cb.messages, { id: userMsgId, role: 'user', content: prompt }].slice(-5) 
+    } : cb));
 
     try {
       const res = await fetch(`/api/chat/${id}`, {
@@ -158,7 +161,7 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
             tokensPerSecond,
             totalDuration: ((data.timings?.predicted_ms || 0) + (data.timings?.prompt_ms || 0)) * 1e6
           }
-        }],
+        }].slice(-5),
         metrics: {
           totalTokens: cb.metrics.totalTokens + evalCount,
           requestsCompleted: cb.metrics.requestsCompleted + 1,
@@ -177,7 +180,7 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
           id: Date.now().toString(), 
           role: 'assistant', 
           content: `Error connecting to llama.cpp instance ${id}.` 
-        }]
+        }].slice(-5)
       } : cb));
     } finally {
       setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { ...cb, isGenerating: false } : cb));
@@ -212,7 +215,7 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
 
       if (allFinishedCurrentSet) {
         iterationCount++;
-        if (iterationCount < 20) {
+        if (iterationCount < 5) {
           // Reset indices for the next iteration
           setChatbots(prev => prev.map(cb => ({ ...cb, currentPromptIndex: 0 })));
           timeoutId = setTimeout(runCycle, 1000); // 1 sec delay between full sets of 5
