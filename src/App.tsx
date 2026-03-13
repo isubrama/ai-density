@@ -248,47 +248,25 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
         </div>
       </div>
       
-      <div className="px-5 py-4 bg-[#161618] border-b border-zinc-800 flex flex-col gap-4">
+      <div className="px-5 py-3 bg-[#161618] border-b border-zinc-800 flex flex-col gap-2.5">
         <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2 text-[10px] text-zinc-400 uppercase tracking-[0.2em] font-bold">
-            <Cpu size={12} className="text-indigo-500" />
-            <span>Compute Core Matrix</span>
+          <div className="flex items-center gap-2 text-[10px] text-zinc-400 uppercase tracking-widest font-bold">
+            <Cpu size={10} className="text-indigo-500" />
+            <span>CPU Load</span>
           </div>
-          <span className={`font-black text-[11px] font-mono bg-zinc-900/50 px-2 py-0.5 rounded border border-zinc-800 ${cpuUsage > 80 ? 'text-rose-500 border-rose-500/20' : cpuUsage > 40 ? 'text-amber-500 border-amber-500/20' : 'text-emerald-500 border-emerald-500/20'}`}>
+          <span className={`font-black text-[10px] font-mono ${cpuUsage > 80 ? 'text-rose-500' : cpuUsage > 40 ? 'text-amber-500' : 'text-emerald-500'}`}>
             {cpuUsage.toFixed(1)}%
           </span>
         </div>
-
-        <div className="grid grid-cols-8 gap-1.5 p-2.5 bg-black/40 rounded-xl border border-zinc-800/50 shadow-inner">
-          {Array.from({ length: 32 }).map((_, i) => {
-            const activeThreshold = (cpuUsage / 100) * 32;
-            const isActive = i < activeThreshold;
-            const intensity = isActive ? Math.min(1, activeThreshold - i) : 0;
-            
-            return (
-              <div 
-                key={i} 
-                className="h-2 rounded-[2px] transition-all duration-1000 relative overflow-hidden bg-zinc-900/50"
-              >
-                {isActive && (
-                  <div 
-                    className={`absolute inset-0 transition-opacity duration-1000 ${
-                      cpuUsage > 80 ? 'bg-rose-500' : cpuUsage > 40 ? 'bg-amber-500' : 'bg-emerald-500'
-                    }`}
-                    style={{ 
-                      opacity: intensity * 0.6 + (Math.random() * 0.4),
-                      boxShadow: intensity > 0.8 ? `0 0 10px ${cpuUsage > 80 ? '#f43f5e' : cpuUsage > 40 ? '#f59e0b' : '#10b981'}` : 'none'
-                    }}
-                  />
-                )}
-              </div>
-            );
-          })}
+        <div className="w-full h-1 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800/50">
+          <div 
+            className={`h-full transition-all duration-1000 ease-out rounded-full ${cpuUsage > 80 ? 'bg-rose-500' : cpuUsage > 40 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+            style={{ width: `${cpuUsage}%` }}
+          ></div>
         </div>
-
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2 text-[10px] text-zinc-400 uppercase tracking-[0.2em] font-bold">
-            <Zap size={12} className="text-indigo-500" />
+        <div className="flex justify-between items-center mt-1">
+          <div className="flex items-center gap-2 text-[10px] text-zinc-400 uppercase tracking-widest font-bold">
+            <Zap size={10} className="text-indigo-500" />
             <span>Throughput</span>
           </div>
           <span className="font-black text-xs text-zinc-100 font-mono bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">
