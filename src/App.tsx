@@ -186,6 +186,7 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
 
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
+    let iterationCount = 0;
 
     const runCycle = async () => {
       if (!autoRunRef.current) return;
@@ -204,14 +205,30 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
 
       await Promise.all(promises);
 
-      if (autoRunRef.current && chatbotsRef.current.some(cb => cb.currentPromptIndex < PROMPTS_PER_INSTANCE[id][cb.id].length)) {
-        timeoutId = setTimeout(runCycle, 1000);
+      if (!autoRunRef.current) return;
+
+      // Check if all chatbots have finished their 5 prompts
+      const allFinishedCurrentSet = chatbotsRef.current.every(cb => cb.currentPromptIndex >= PROMPTS_PER_INSTANCE[id][cb.id].length);
+
+      if (allFinishedCurrentSet) {
+        iterationCount++;
+        if (iterationCount < 20) {
+          // Reset indices for the next iteration
+          setChatbots(prev => prev.map(cb => ({ ...cb, currentPromptIndex: 0 })));
+          timeoutId = setTimeout(runCycle, 1000); // 1 sec delay between full sets of 5
+        } else {
+          setIsAutoRunning(false);
+        }
       } else {
-        setIsAutoRunning(false);
+        // Continue with the next prompt in the current set immediately
+        runCycle();
       }
     };
 
-    if (isAutoRunning) runCycle();
+    if (isAutoRunning) {
+      iterationCount = 0;
+      runCycle();
+    }
     return () => clearTimeout(timeoutId);
   }, [isAutoRunning, id]);
 
@@ -435,7 +452,7 @@ export default function App() {
 
         <footer className="mt-12 border-t border-zinc-800/50 pt-8 flex items-center justify-between text-zinc-700">
           <div className="text-[9px] uppercase tracking-[0.3em] font-bold">
-            © 2024 Ampere Computing LLC
+            © 2026 Ampere Computing LLC
           </div>
           <div className="flex items-center gap-4">
             <span className="text-[9px] font-mono">Build v3.4.2-A1</span>
