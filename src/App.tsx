@@ -363,7 +363,7 @@ export default function App() {
               <img 
                 src="/ampere-logo.svg" 
                 alt="Ampere Logo" 
-                className="w-48 h-12 relative grayscale brightness-200"
+                className="w-48 h-12 relative"
               />
             </div>
             <div className="h-12 w-px bg-zinc-800 hidden md:block"></div>
