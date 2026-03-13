@@ -373,8 +373,8 @@ export default function App() {
           
           {/* Brand Left */}
           <div className="flex items-center gap-6 shrink-0">
-            <div className="relative bg-white px-3 py-1.5 rounded-lg border border-white/10 shadow-sm shrink-0">
-              <img src="/ampere-logo.svg" alt="Ampere Logo" className="h-6 w-auto object-contain" />
+            <div className="relative shrink-0">
+              <img src="/ampere-logo-dark.png" alt="Ampere Logo" className="h-8 w-auto object-contain" />
             </div>
             <div className="flex flex-col">
               <h1 className="text-lg font-black tracking-tighter text-white uppercase leading-none mb-1">
