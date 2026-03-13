@@ -369,31 +369,36 @@ export default function App() {
               <h1 className="text-lg font-black tracking-tighter text-white uppercase leading-none mb-1">
                 LLM <span className="italic" style={{ color: '#F83821' }}>Orchestrator</span>
               </h1>
-              <p className="text-[10px] text-zinc-500 font-bold tracking-widest uppercase truncate max-w-[200px]">
+              <p className="text-[10px] text-zinc-500 font-bold tracking-widest uppercase whitespace-nowrap">
                 Powered by AmpereOne® M CPUs
               </p>
             </div>
           </div>
 
           {/* Metrics Center */}
-          <div className="flex items-center gap-8 flex-1 justify-center px-8">
-            <div className="flex flex-col items-center">
-              <div className="flex items-center gap-1.5 text-[9px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-1">
-                <Zap size={10} className="fill-indigo-400" />
-                Real-time
-              </div>
-              <div className="text-3xl font-black text-white font-mono tabular-nums leading-none">
-                {totalTPS.toFixed(1)} <span className="text-[10px] text-zinc-600 font-bold ml-1">TPS</span>
-              </div>
+          <div className="flex flex-col items-center flex-1">
+            <div className="text-[9px] text-zinc-600 font-black uppercase tracking-[0.4em] mb-3 opacity-50">
+              High Density Enterprise Inference
             </div>
-            <div className="h-8 w-px bg-zinc-800"></div>
-            <div className="flex flex-col items-center">
-              <div className="flex items-center gap-1.5 text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-1">
-                <ChevronRight size={10} className="text-indigo-500" />
-                Session Peak
+            <div className="flex items-center gap-8 justify-center w-full px-8">
+              <div className="flex flex-col items-center">
+                <div className="flex items-center gap-1.5 text-[9px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-1">
+                  <Zap size={10} className="fill-indigo-400" />
+                  Real-time
+                </div>
+                <div className="text-3xl font-black text-white font-mono tabular-nums leading-none">
+                  {totalTPS.toFixed(1)} <span className="text-[10px] text-zinc-600 font-bold ml-1">TPS</span>
+                </div>
               </div>
-              <div className="text-3xl font-black text-zinc-400 font-mono tabular-nums leading-none">
-                {peakTPS.toFixed(1)} <span className="text-[10px] text-zinc-700 font-bold ml-1">TPS</span>
+              <div className="h-8 w-px bg-zinc-800"></div>
+              <div className="flex flex-col items-center">
+                <div className="flex items-center gap-1.5 text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-1">
+                  <ChevronRight size={10} className="text-indigo-500" />
+                  Session Peak
+                </div>
+                <div className="text-3xl font-black text-zinc-400 font-mono tabular-nums leading-none">
+                  {peakTPS.toFixed(1)} <span className="text-[10px] text-zinc-700 font-bold ml-1">TPS</span>
+                </div>
               </div>
             </div>
           </div>
