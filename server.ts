@@ -111,13 +111,13 @@ async function updateCpuStats() {
         if (deltaTime > 0n) {
           // hostPercent is percentage of one core (100.0 = 1 core fully used)
           const hostPercent = (Number(deltaUsage) / Number(deltaTime)) * 100.0;
-          // Normalize to assigned 32 cores
+          // Normalize to assigned 32 cores and convert to integer
           const instancePercent = hostPercent / 32.0;
-          const newVal = Math.min(instancePercent, 100.0);
+          const newVal = Math.min(Math.round(instancePercent), 100);
           
           const oldVal = cpuUsageCache[i.toString()];
-          if (oldVal.toFixed(2) !== newVal.toFixed(2)) {
-            console.log(`[DEBUG] CPU Usage for llama-cpp-${i} changed: ${oldVal.toFixed(2)}% -> ${newVal.toFixed(2)}%`);
+          if (oldVal !== newVal) {
+            console.log(`[DEBUG] CPU Usage for llama-cpp-${i} changed: ${oldVal}% -> ${newVal}%`);
           }
           cpuUsageCache[i.toString()] = newVal;
           statsEmitter.emit("statsUpdate", { id: i.toString(), cpu_usage: newVal });

@@ -289,7 +289,7 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
             <span>CPU Load</span>
           </div>
           <span className={`font-black text-[10px] font-mono ${cpuUsage > 80 ? 'text-rose-500' : cpuUsage > 40 ? 'text-amber-500' : 'text-emerald-500'}`}>
-            {cpuUsage.toFixed(1)}%
+            {cpuUsage}%
           </span>
         </div>
         <div className="w-full h-1 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800/50">
