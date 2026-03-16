@@ -20,6 +20,11 @@ const cpuUsageCache: Record<string, number> = {
   "4": 0
 };
 
+// Caches for performance optimization
+const containerIdCache: Record<string, string> = {};
+const cgroupPathCache: Record<string, string> = {};
+const prevCpuStats: Record<string, { containerUsage: bigint, time: bigint }> = {};
+
 // Function to get stats from Docker Socket
 async function getContainerStats(containerName: string) {
   return new Promise<any>((resolve, reject) => {
@@ -49,32 +54,75 @@ async function getContainerStats(containerName: string) {
   });
 }
 
+// Helper to read cgroup usage
+function getContainerCgroupUsage(id: string, i: number): bigint {
+  let p = cgroupPathCache[i.toString()];
+  if (!p || !fs.existsSync(p)) {
+    const paths = [
+      `/sys/fs/cgroup/system.slice/docker-${id}.scope/cpu.stat`,
+      `/sys/fs/cgroup/docker/${id}/cpu.stat`,
+      `/sys/fs/cgroup/cpuacct/docker/${id}/cpuacct.usage`,
+    ];
+    p = paths.find(fs.existsSync) || "";
+    if (p) cgroupPathCache[i.toString()] = p;
+  }
+
+  if (!p) throw new Error(`No cgroup path for container ${id}`);
+
+  const content = fs.readFileSync(p, "utf8");
+  if (p.endsWith("cpu.stat")) {
+    const match = content.match(/usage_usec (\d+)/);
+    if (!match) throw new Error(`No usage_usec in ${p}`);
+    return BigInt(match[1]) * 1000n; // convert usec to ns
+  } else {
+    return BigInt(content.trim()); // already in ns
+  }
+}
+
 // Function to update stats for all containers in parallel
 async function updateCpuStats() {
+  const now = process.hrtime.bigint();
   const promises = [1, 2, 3, 4].map(async (i) => {
     try {
-      // Try common container name formats
-      let stats;
-      try {
-        stats = await getContainerStats(`ai-density-llama-cpp-${i}-1`);
-      } catch (e) {
-        stats = await getContainerStats(`llama-cpp-${i}`);
+      let id = containerIdCache[i.toString()];
+      if (!id) {
+        // First time, resolve name to ID via Docker API
+        let stats;
+        try {
+          stats = await getContainerStats(`ai-density-llama-cpp-${i}-1`);
+        } catch (e) {
+          stats = await getContainerStats(`llama-cpp-${i}`);
+        }
+        id = stats.id;
+        containerIdCache[i.toString()] = id;
       }
-      
-      const cpuDelta = stats.cpu_stats.cpu_usage.total_usage - stats.precpu_stats.cpu_usage.total_usage;
-      const systemDelta = stats.cpu_stats.system_cpu_usage - stats.precpu_stats.system_cpu_usage;
-      const numCpus = stats.cpu_stats.online_cpus || 1;
 
-      if (systemDelta > 0 && cpuDelta > 0) {
-        // Normalize to assigned 32 cores for this instance
-        const hostPercent = (cpuDelta / systemDelta) * numCpus * 100.0;
-        const instancePercent = hostPercent / 32.0;
-        cpuUsageCache[i.toString()] = Math.min(instancePercent, 100.0);
-      } else {
-        cpuUsageCache[i.toString()] = 0;
+      const usage = getContainerCgroupUsage(id, i);
+      const prev = prevCpuStats[i.toString()];
+
+      if (prev) {
+        const deltaUsage = usage - prev.containerUsage;
+        const deltaTime = now - prev.time;
+        if (deltaTime > 0n) {
+          // hostPercent is percentage of one core (100.0 = 1 core fully used)
+          const hostPercent = (Number(deltaUsage) / Number(deltaTime)) * 100.0;
+          // Normalize to assigned 32 cores
+          const instancePercent = hostPercent / 32.0;
+          const newVal = Math.min(instancePercent, 100.0);
+          
+          const oldVal = cpuUsageCache[i.toString()];
+          if (oldVal.toFixed(2) !== newVal.toFixed(2)) {
+            console.log(`[DEBUG] CPU Usage for llama-cpp-${i} changed: ${oldVal.toFixed(2)}% -> ${newVal.toFixed(2)}%`);
+          }
+          cpuUsageCache[i.toString()] = newVal;
+        }
       }
+      prevCpuStats[i.toString()] = { containerUsage: usage, time: now };
     } catch (error) {
       cpuUsageCache[i.toString()] = 0;
+      // Reset caches on error to allow recovery if container restarts
+      delete containerIdCache[i.toString()];
+      delete cgroupPathCache[i.toString()];
     }
   });
 
