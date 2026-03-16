@@ -210,43 +210,42 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
     }
   };
 
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
+  const runWorker = async (workerIndex: number) => {
+    // Independent loop for each worker to eliminate "bursting" and keep CPU busy
+    while (autoRunRef.current) {
+      const cb = chatbotsRef.current[workerIndex];
+      const chatbotPrompts = PROMPTS_PER_INSTANCE[id][workerIndex];
+      
+      if (cb.currentPromptIndex >= chatbotPrompts.length) break;
+      
+      const prompt = chatbotPrompts[cb.currentPromptIndex];
+      await generateResponse(workerIndex, prompt);
+      
+      if (!autoRunRef.current) break;
 
-    const runCycle = async () => {
-      if (!autoRunRef.current) return;
-
-      const promises = chatbotsRef.current.map(async (cb, index) => {
-        const chatbotPrompts = PROMPTS_PER_INSTANCE[id][index];
-        if (cb.isGenerating || cb.currentPromptIndex >= chatbotPrompts.length) return;
+      // Update index for this specific worker immediately
+      setChatbots(prev => {
+        const next = prev.map((c, i) => i === workerIndex ? { ...c, currentPromptIndex: c.currentPromptIndex + 1 } : c);
         
-        const prompt = chatbotPrompts[cb.currentPromptIndex];
-        await generateResponse(index, prompt);
-        
-        if (!autoRunRef.current) return;
-
-        setChatbots(prev => prev.map((c, i) => i === index ? { ...c, currentPromptIndex: c.currentPromptIndex + 1 } : c));
+        // If this was the last prompt for ALL workers in this instance, stop the auto-run
+        const allFinished = next.every(c => c.currentPromptIndex >= PROMPTS_PER_INSTANCE[id][c.id].length);
+        if (allFinished) {
+          setIsAutoRunning(false);
+        }
+        return next;
       });
 
-      await Promise.all(promises);
-
-      if (!autoRunRef.current) return;
-
-      // Check if all chatbots have finished their 5 prompts
-      const allFinished = chatbotsRef.current.every(cb => cb.currentPromptIndex >= PROMPTS_PER_INSTANCE[id][cb.id].length);
-
-      if (allFinished) {
-        setIsAutoRunning(false);
-      } else {
-        // Continue with the next prompt in the current set immediately
-        timeoutId = setTimeout(runCycle, 100); 
-      }
-    };
-
-    if (isAutoRunning) {
-      runCycle();
+      // No artificial delay (like setTimeout 100ms) to ensure maximum CPU throughput
+      // Tiny yield to event loop to keep UI responsive
+      await new Promise(resolve => setTimeout(resolve, 10));
     }
-    return () => clearTimeout(timeoutId);
+  };
+
+  useEffect(() => {
+    if (isAutoRunning) {
+      // Launch all workers independently rather than in a synchronized batch
+      [0, 1, 2, 3, 4].forEach(index => runWorker(index));
+    }
   }, [isAutoRunning, id]);
 
   const getInstanceIcon = () => {
