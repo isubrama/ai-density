@@ -4,8 +4,13 @@ import path from "path";
 import fs from "fs";
 import http from "http";
 import { fileURLToPath } from "url";
+import { EventEmitter } from "events";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Event emitter for stats updates
+const statsEmitter = new EventEmitter();
+statsEmitter.setMaxListeners(100);
 
 // Load prompts from src/prompts.json
 const promptsPath = path.resolve(__dirname, "src/prompts.json");
@@ -115,11 +120,13 @@ async function updateCpuStats() {
             console.log(`[DEBUG] CPU Usage for llama-cpp-${i} changed: ${oldVal.toFixed(2)}% -> ${newVal.toFixed(2)}%`);
           }
           cpuUsageCache[i.toString()] = newVal;
+          statsEmitter.emit("statsUpdate", { id: i.toString(), cpu_usage: newVal });
         }
       }
       prevCpuStats[i.toString()] = { containerUsage: usage, time: now };
     } catch (error) {
       cpuUsageCache[i.toString()] = 0;
+      statsEmitter.emit("statsUpdate", { id: i.toString(), cpu_usage: 0 });
       // Reset caches on error to allow recovery if container restarts
       delete containerIdCache[i.toString()];
       delete cgroupPathCache[i.toString()];
@@ -145,6 +152,24 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json());
+
+  // SSE Endpoint for stats
+  app.get("/api/stats/stream", (req, res) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+
+    const onUpdate = (data: any) => {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    statsEmitter.on("statsUpdate", onUpdate);
+
+    req.on("close", () => {
+      statsEmitter.off("statsUpdate", onUpdate);
+    });
+  });
 
   console.log("Server starting...");
   // Start polling immediately

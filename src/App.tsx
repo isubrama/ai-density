@@ -76,8 +76,27 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
   useEffect(() => {
     checkStatus();
     fetchModel();
-    const interval = setInterval(checkStatus, 2000);
-    return () => clearInterval(interval);
+    
+    // Status polling still needed for online/offline check
+    const statusInterval = setInterval(checkStatus, 5000);
+
+    // SSE for CPU usage updates (Push Architecture)
+    const eventSource = new EventSource('/api/stats/stream');
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.id === id.toString()) {
+          setCpuUsage(data.cpu_usage);
+        }
+      } catch (e) {
+        console.error("Failed to parse SSE data", e);
+      }
+    };
+
+    return () => {
+      clearInterval(statusInterval);
+      eventSource.close();
+    };
   }, [id]);
 
   const checkStatus = async () => {
@@ -85,7 +104,11 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
       const res = await fetch(`/api/status/${id}`);
       const data = await res.json();
       setStatus(data.status);
-      setCpuUsage(data.cpu_usage || 0);
+      // setCpuUsage is now primarily handled by SSE, 
+      // but we update it here once on mount/check for consistency
+      if (data.cpu_usage !== undefined) {
+        setCpuUsage(data.cpu_usage);
+      }
     } catch (e) {
       setStatus('offline');
       setCpuUsage(0);
