@@ -149,19 +149,37 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
 
   useEffect(() => {
     const socket = new WebSocket(`ws://${window.location.host}`);
+
+    socket.onopen = () => {
+      console.log("[DEBUG] WebSocket Connected to", window.location.host);
+      setWs(socket);
+    };
+
+    socket.onclose = (e) => {
+      console.log(`[DEBUG] WebSocket Closed: ${e.code} - ${e.reason}`);
+      setWs(null);
+    };
+
+    socket.onerror = (e) => {
+      console.error("[DEBUG] WebSocket Error:", e);
+    };
+
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.chatId !== undefined && pendingRequests[data.chatId]) {
         pendingRequests[data.chatId](data);
       }
     };
-    setWs(socket);
+
     return () => socket.close();
   }, [pendingRequests]);
 
   const generateResponse = async (chatbotIndex: number, prompt: string) => {
-    if (!autoRunRef.current || !ws) return;
-    
+    if (!autoRunRef.current || !ws || ws.readyState !== WebSocket.OPEN) {
+      console.warn(`[DEBUG] WS not ready (state: ${ws?.readyState}), cannot send prompt for chatbot ${chatbotIndex}`);
+      return;
+    }
+
     setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { ...cb, isGenerating: true } : cb));
     const userMsgId = Date.now().toString() + chatbotIndex;
     setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { 
@@ -169,17 +187,11 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
       messages: [...cb.messages, { id: userMsgId, role: 'user', content: prompt }].slice(-5) 
     } : cb));
 
-    // Map prompt to ID based on index
-    // The prompts.json structure is { "1": { "0": [...] }, ... }
-    // chatbotIndex in `generateResponse` corresponds to the workerIndex
-    // We need to map `chatbotIndex` to the correct category and group
-    // In prompts.json: 
-    // Legal(1) is category 1. workerIndex 0 is group 0.
-    const promptId = `${id}:${chatbotIndex}:0`; // Simplified mapping for now, based on your structure
+    const promptId = `${id}:${chatbotIndex}:0`;
 
     return new Promise<void>((resolve) => {
       const chatbotId = (id - 1) * 5 + chatbotIndex + 1;
-      
+
       setPendingRequests(prev => ({
         ...prev,
         [chatbotId]: (data: any) => {
@@ -199,7 +211,7 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
                     )
             } : cb));
           } else if (data.error) {
-            console.error(data.error);
+            console.error(`[DEBUG] Server returned error for chatbot ${chatbotId}:`, data.error);
             resolve();
           }
         }
@@ -209,9 +221,10 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
       ws.send(JSON.stringify({ 
         chatId: chatbotId,
         promptId
-      }));      
-      // Resolve after some timeout or completion signal
-      setTimeout(resolve, 5000); // Simple timeout for demonstration
+      }));
+
+      // Simple completion heuristic/timeout
+      setTimeout(resolve, 10000); 
     });
   };
 
