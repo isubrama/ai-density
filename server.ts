@@ -194,15 +194,22 @@ async function startServer() {
   wss.on('connection', (ws) => {
     ws.on('message', async (message: string) => {
       try {
-        const { chatId, promptId } = JSON.parse(message);
+        const msg = JSON.parse(message.toString());
+        console.log(`[DEBUG] Received WS message:`, msg);
+        const { chatId, promptId } = msg;
         const instanceId = CHATBOT_PINNING[chatId];
         if (!instanceId) throw new Error("Invalid chatId");
 
         const [cat, grp, idx] = promptId.split(':');
+        console.log(`[DEBUG] Looking up prompt cat=${cat}, grp=${grp}, idx=${idx}`);
         const systemMessage = SYSTEM_PROMPTS[cat];
         const promptText = prompts[cat][grp][idx];
+        
+        if (!promptText) throw new Error("Prompt not found");
+        console.log(`[DEBUG] Found prompt text: "${promptText.substring(0, 50)}..."`);
 
         const url = getLlamaUrl(instanceId);
+        console.log(`[DEBUG] Forwarding to llama instance ${instanceId} at ${url}`);
         
         const response = await fetch(`${url}/completion`, {
           method: "POST",
@@ -210,15 +217,21 @@ async function startServer() {
           body: JSON.stringify({
             prompt: `<|im_start|>system\n${systemMessage}<|im_end|>\n<|im_start|>user\n${promptText}<|im_end|>\n<|im_start|>assistant\n`,
             n_predict: 256,
-            stream: true // Enable streaming for real-time tokens
+            stream: true
           })
         });
 
+        if (!response.ok) {
+          const errText = await response.text();
+          console.error(`[DEBUG] Llama API error (${response.status}): ${errText}`);
+          throw new Error(`Llama API error: ${response.status}`);
+        }
+
         if (!response.body) throw new Error("No response body");
         
+        console.log(`[DEBUG] Successfully connected to instance ${instanceId}, streaming tokens...`);
         for await (const chunk of response.body as any) {
           const text = new TextDecoder().decode(chunk);
-          // Simple parsing: llama.cpp stream format returns data: { content: "..." }
           const lines = text.split('\n');
           for (const line of lines) {
             if (line.startsWith('data: ')) {
@@ -232,6 +245,7 @@ async function startServer() {
           }
         }
       } catch (err: any) {
+        console.error(`[DEBUG] Error in WS handler:`, err);
         ws.send(JSON.stringify({ chatId: -1, error: err.message }));
       }
     });

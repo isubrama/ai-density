@@ -205,11 +205,11 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
         }
       }));
 
+      console.log(`[DEBUG] Sending WS prompt: chatId=${chatbotId}, promptId=${promptId}`);
       ws.send(JSON.stringify({ 
         chatId: chatbotId,
         promptId
-      }));
-      
+      }));      
       // Resolve after some timeout or completion signal
       setTimeout(resolve, 5000); // Simple timeout for demonstration
     });
