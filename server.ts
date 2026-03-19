@@ -226,24 +226,39 @@ async function startServer() {
           console.error(`[DEBUG] Llama API error (${response.status}): ${errText}`);
           throw new Error(`Llama API error: ${response.status}`);
         }
+if (!response.body) throw new Error("No response body");
 
-        if (!response.body) throw new Error("No response body");
-        
-        console.log(`[DEBUG] Successfully connected to instance ${instanceId}, streaming tokens...`);
-        for await (const chunk of response.body as any) {
-          const text = new TextDecoder().decode(chunk);
-          const lines = text.split('\n');
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const json = JSON.parse(line.slice(6));
-                if (json.content) {
-                  ws.send(JSON.stringify({ chatId, token: json.content }));
-                }
-              } catch (e) {}
-            }
+console.log(`[DEBUG] Successfully connected to instance ${instanceId}, streaming tokens...`);
+
+const reader = (response.body as any).getReader();
+const decoder = new TextDecoder();
+
+try {
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    const text = decoder.decode(value, { stream: true });
+    console.log(`[DEBUG] Received chunk: ${text.length} bytes`);
+
+    const lines = text.split('\n');
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        try {
+          const json = JSON.parse(line.slice(6));
+          if (json.content) {
+            ws.send(JSON.stringify({ chatId, token: json.content }));
           }
+        } catch (e) {
+          console.error(`[DEBUG] Error parsing JSON: ${line}`);
         }
+      }
+    }
+  }
+  console.log(`[DEBUG] Stream completed for chatId ${chatId}`);
+} finally {
+  reader.releaseLock();
+}
       } catch (err: any) {
         console.error(`[DEBUG] Error in WS handler:`, err);
         ws.send(JSON.stringify({ chatId: -1, error: err.message }));
