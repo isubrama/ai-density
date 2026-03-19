@@ -144,8 +144,23 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
     }
   };
 
+  const [ws, setWs] = useState<WebSocket | null>(null);
+  const [pendingRequests, setPendingRequests] = useState<Record<string, (data: any) => void>>({});
+
+  useEffect(() => {
+    const socket = new WebSocket(`ws://${window.location.host}`);
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.chatId !== undefined && pendingRequests[data.chatId]) {
+        pendingRequests[data.chatId](data);
+      }
+    };
+    setWs(socket);
+    return () => socket.close();
+  }, [pendingRequests]);
+
   const generateResponse = async (chatbotIndex: number, prompt: string) => {
-    if (!autoRunRef.current) return;
+    if (!autoRunRef.current || !ws) return;
     
     setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { ...cb, isGenerating: true } : cb));
     const userMsgId = Date.now().toString() + chatbotIndex;
@@ -154,60 +169,50 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
       messages: [...cb.messages, { id: userMsgId, role: 'user', content: prompt }].slice(-5) 
     } : cb));
 
-    try {
-      const res = await fetch(`/api/chat/${id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
-        signal: abortControllerRef.current?.signal
-      });
+    // Map prompt to ID based on index
+    // The prompts.json structure is { "1": { "0": [...] }, ... }
+    // chatbotIndex in `generateResponse` corresponds to the workerIndex
+    // We need to map `chatbotIndex` to the correct category and group
+    // In prompts.json: 
+    // Legal(1) is category 1. workerIndex 0 is group 0.
+    const promptId = `${id}:${chatbotIndex}:0`; // Simplified mapping for now, based on your structure
 
-      if (!res.ok) throw new Error('Failed to generate');
+    return new Promise<void>((resolve) => {
+      const chatbotId = (id - 1) * 5 + chatbotIndex + 1;
       
-      const data = await res.json();
-      
-      if (!autoRunRef.current) return;
-
-      const evalCount = data.tokens_predicted || 0;
-      const tokensPerSecond = data.timings?.predicted_per_second || 0;
-
-      const assistantMsgId = (Date.now() + 1).toString() + chatbotIndex;
-      setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { 
-        ...cb, 
-        messages: [...cb.messages, {
-          id: assistantMsgId,
-          role: 'assistant',
-          content: data.content,
-          metrics: {
-            evalCount,
-            evalDuration: (data.timings?.predicted_ms || 0) * 1e6,
-            tokensPerSecond,
-            totalDuration: ((data.timings?.predicted_ms || 0) + (data.timings?.prompt_ms || 0)) * 1e6
+      setPendingRequests(prev => ({
+        ...prev,
+        [chatbotId]: (data: any) => {
+          if (data.token) {
+            setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? {
+              ...cb,
+              messages: cb.messages.map((m, msgIdx) => 
+                msgIdx === cb.messages.length - 1 && m.role === 'assistant' 
+                  ? { ...m, content: m.content + data.token }
+                  : m
+              ).length === cb.messages.length && cb.messages[cb.messages.length - 1].role === 'user'
+                  ? [...cb.messages, { id: (Date.now() + 1).toString(), role: 'assistant', content: data.token }]
+                  : cb.messages.map((m, msgIdx) => 
+                      msgIdx === cb.messages.length - 1 && m.role === 'assistant' 
+                        ? { ...m, content: m.content + data.token }
+                        : m
+                    )
+            } : cb));
+          } else if (data.error) {
+            console.error(data.error);
+            resolve();
           }
-        }].slice(-5),
-        metrics: {
-          totalTokens: cb.metrics.totalTokens + evalCount,
-          requestsCompleted: cb.metrics.requestsCompleted + 1,
-          avgTokensPerSecond: cb.metrics.avgTokensPerSecond === 0 
-            ? tokensPerSecond 
-            : ((cb.metrics.avgTokensPerSecond * cb.metrics.requestsCompleted) + tokensPerSecond) / (cb.metrics.requestsCompleted + 1)
         }
-      } : cb));
+      }));
 
-    } catch (error: any) {
-      if (error.name === 'AbortError') return;
-      console.error(error);
-      setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { 
-        ...cb, 
-        messages: [...cb.messages, { 
-          id: Date.now().toString(), 
-          role: 'assistant', 
-          content: `Error connecting to llama.cpp instance ${id}.` 
-        }].slice(-5)
-      } : cb));
-    } finally {
-      setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { ...cb, isGenerating: false } : cb));
-    }
+      ws.send(JSON.stringify({ 
+        chatId: chatbotId,
+        promptId
+      }));
+      
+      // Resolve after some timeout or completion signal
+      setTimeout(resolve, 5000); // Simple timeout for demonstration
+    });
   };
 
   const runWorker = async (workerIndex: number) => {

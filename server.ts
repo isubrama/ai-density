@@ -5,6 +5,7 @@ import fs from "fs";
 import http from "http";
 import { fileURLToPath } from "url";
 import { EventEmitter } from "events";
+import { WebSocketServer, WebSocket } from "ws";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -16,6 +17,12 @@ statsEmitter.setMaxListeners(100);
 const promptsPath = path.resolve(__dirname, "src/prompts.json");
 const prompts = JSON.parse(fs.readFileSync(promptsPath, "utf8"));
 const SYSTEM_PROMPTS = prompts.system_prompts;
+
+// Map Chatbot ID (1-20) to Llama Instance ID (1-4)
+const CHATBOT_PINNING: Record<number, string> = {};
+for (let i = 1; i <= 20; i++) {
+  CHATBOT_PINNING[i] = Math.ceil(i / 5).toString();
+}
 
 // Global state for CPU usage
 const cpuUsageCache: Record<string, number> = {
@@ -180,6 +187,56 @@ async function startServer() {
     return process.env[envVar] || `http://localhost:808${parseInt(id) - 1}`;
   };
 
+  // HTTP Server to upgrade for WebSockets
+  const server = http.createServer(app);
+  const wss = new WebSocketServer({ server });
+
+  wss.on('connection', (ws) => {
+    ws.on('message', async (message: string) => {
+      try {
+        const { chatId, promptId } = JSON.parse(message);
+        const instanceId = CHATBOT_PINNING[chatId];
+        if (!instanceId) throw new Error("Invalid chatId");
+
+        const [cat, grp, idx] = promptId.split(':');
+        const systemMessage = SYSTEM_PROMPTS[cat];
+        const promptText = prompts[cat][grp][idx];
+
+        const url = getLlamaUrl(instanceId);
+        
+        const response = await fetch(`${url}/completion`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: `<|im_start|>system\n${systemMessage}<|im_end|>\n<|im_start|>user\n${promptText}<|im_end|>\n<|im_start|>assistant\n`,
+            n_predict: 256,
+            stream: true // Enable streaming for real-time tokens
+          })
+        });
+
+        if (!response.body) throw new Error("No response body");
+        
+        for await (const chunk of response.body as any) {
+          const text = new TextDecoder().decode(chunk);
+          // Simple parsing: llama.cpp stream format returns data: { content: "..." }
+          const lines = text.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const json = JSON.parse(line.slice(6));
+                if (json.content) {
+                  ws.send(JSON.stringify({ chatId, token: json.content }));
+                }
+              } catch (e) {}
+            }
+          }
+        }
+      } catch (err: any) {
+        ws.send(JSON.stringify({ chatId: -1, error: err.message }));
+      }
+    });
+  });
+
   app.get("/api/models/:id", async (req, res) => {
     try {
       const url = getLlamaUrl(req.params.id);
@@ -214,27 +271,6 @@ async function startServer() {
     }
   });
 
-  app.post("/api/chat/:id", async (req, res) => {
-    try {
-      const url = getLlamaUrl(req.params.id);
-      const { prompt } = req.body;
-      const systemMessage = SYSTEM_PROMPTS[req.params.id] || "You are a helpful assistant.";
-      const response = await fetch(`${url}/completion`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: `<|im_start|>system\n${systemMessage}<|im_end|>\n<|im_start|>user\n${prompt}<|im_end|>\n<|im_start|>assistant\n`,
-          n_predict: 256,
-          stream: false
-        })
-      });
-      const data = await response.json();
-      res.json(data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
@@ -243,7 +279,7 @@ async function startServer() {
     app.get("*", (req, res) => res.sendFile(path.resolve(__dirname, "dist", "index.html")));
   }
 
-  app.listen(PORT, "0.0.0.0", () => console.log(`Server running on http://localhost:${PORT}`));
+  server.listen(PORT, "0.0.0.0", () => console.log(`Server running on http://localhost:${PORT}`));
 }
 
 startServer();
