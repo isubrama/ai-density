@@ -16,6 +16,18 @@ interface Message {
   };
 }
 
+interface Chatbot {
+  id: number;
+  messages: Message[];
+  currentPromptIndex: number;
+  isGenerating: boolean;
+  metrics: {
+    totalTokens: number;
+    avgTokensPerSecond: number;
+    requestsCompleted: number;
+  };
+}
+
 interface ChatbotInstanceProps {
   id: number;
   name: string;
@@ -31,7 +43,17 @@ const ChatbotInstance = forwardRef<any, ChatbotInstanceProps>(({ id, name, port,
   const [status, setStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   const [model, setModel] = useState<string>('Loading...');
   
-  const [chatbots, setChatbots] = useState(Array.from({ length: 5 }, (_, i) => ({
+  // React state is now only for rendering (Decoupled UI)
+  const [chatbots, setChatbots] = useState<Chatbot[]>(Array.from({ length: 5 }, (_, i) => ({
+    id: i,
+    messages: [] as Message[],
+    currentPromptIndex: 0,
+    isGenerating: false,
+    metrics: { totalTokens: 0, avgTokensPerSecond: 0, requestsCompleted: 0 }
+  })));
+
+  // Source of truth for the logic loop (Fast Path)
+  const chatbotsRef = useRef<Chatbot[]>(Array.from({ length: 5 }, (_, i) => ({
     id: i,
     messages: [] as Message[],
     currentPromptIndex: 0,
@@ -41,8 +63,6 @@ const ChatbotInstance = forwardRef<any, ChatbotInstanceProps>(({ id, name, port,
 
   const messageRefs = useRef<(HTMLDivElement | null)[]>(Array(5).fill(null));
   const promptRefs = useRef<(HTMLDivElement | null)[]>(Array(5).fill(null));
-  const chatbotsRef = useRef(chatbots);
-  useEffect(() => { chatbotsRef.current = chatbots; }, [chatbots]);
 
   const autoRunRef = useRef(isAutoRunning);
   useEffect(() => { 
@@ -50,13 +70,13 @@ const ChatbotInstance = forwardRef<any, ChatbotInstanceProps>(({ id, name, port,
     onRunningChange?.(isAutoRunning);
   }, [isAutoRunning, onRunningChange]);
 
-  // Track pending requests for this instance to handle responses
   const pendingRequests = useRef<Map<string, number>>(new Map());
 
   useImperativeHandle(ref, () => ({
     start: () => {
       if (status === 'online' && !isAutoRunning) {
-        setChatbots(prev => prev.map(cb => ({ ...cb, currentPromptIndex: 0, messages: [], isGenerating: false })));
+        chatbotsRef.current = chatbotsRef.current.map(cb => ({ ...cb, currentPromptIndex: 0, messages: [], isGenerating: false }));
+        setChatbots([...chatbotsRef.current]);
         setIsAutoRunning(true);
       }
     },
@@ -68,6 +88,29 @@ const ChatbotInstance = forwardRef<any, ChatbotInstanceProps>(({ id, name, port,
     status
   }));
 
+  // Throttled UI Synchronization (10 FPS)
+  useEffect(() => {
+    let interval: any;
+    if (isAutoRunning) {
+      interval = setInterval(() => {
+        // Deep clone for React to detect changes
+        setChatbots(chatbotsRef.current.map(cb => ({
+          ...cb,
+          messages: [...cb.messages],
+          metrics: { ...cb.metrics }
+        })));
+      }, 100);
+    } else {
+      setChatbots(chatbotsRef.current.map(cb => ({
+        ...cb,
+        messages: [...cb.messages],
+        metrics: { ...cb.metrics }
+      })));
+    }
+    return () => clearInterval(interval);
+  }, [isAutoRunning]);
+
+  // Handle TPS and Scrolling on UI update
   useEffect(() => {
     chatbots.forEach((cb, index) => {
       if (messageRefs.current[index]) {
@@ -89,7 +132,6 @@ const ChatbotInstance = forwardRef<any, ChatbotInstanceProps>(({ id, name, port,
     return () => clearInterval(statusInterval);
   }, [id]);
 
-  // Handle incoming WebSocket responses via Event Bus
   useEffect(() => {
     const handleLlamaResponse = (event: any) => {
       const response = event.detail;
@@ -101,7 +143,6 @@ const ChatbotInstance = forwardRef<any, ChatbotInstanceProps>(({ id, name, port,
         }
       }
     };
-
     window.addEventListener('llama_response', handleLlamaResponse);
     return () => window.removeEventListener('llama_response', handleLlamaResponse);
   }, []);
@@ -120,29 +161,18 @@ const ChatbotInstance = forwardRef<any, ChatbotInstanceProps>(({ id, name, port,
     try {
       const res = await fetch(`/api/models/${id}`);
       const data = await res.json();
-      
       let modelInfo = '';
-      if (data.models && data.models.length > 0) {
-        modelInfo = data.models[0].id || data.models[0].name || data.models[0];
-      } else if (data.data && Array.isArray(data.data) && data.data.length > 0) {
-        modelInfo = data.data[0].id || data.data[0].name || data.data[0];
-      } else if (data.default_generation_settings?.model) {
-        modelInfo = data.default_generation_settings.model;
-      } else if (data.model_path) {
-        modelInfo = data.model_path;
-      } else if (data.model) {
-        modelInfo = data.model;
-      }
+      if (data.models && data.models.length > 0) modelInfo = data.models[0].id || data.models[0].name || data.models[0];
+      else if (data.data && Array.isArray(data.data) && data.data.length > 0) modelInfo = data.data[0].id || data.data[0].name || data.data[0];
+      else if (data.default_generation_settings?.model) modelInfo = data.default_generation_settings.model;
+      else if (data.model_path) modelInfo = data.model_path;
+      else if (data.model) modelInfo = data.model;
 
       if (modelInfo && typeof modelInfo === 'string') {
         const modelName = modelInfo.split('/').pop() || modelInfo;
         setModel(modelName);
-      } else {
-        setModel('Unknown');
-      }
-    } catch (e) {
-      setModel('Unknown');
-    }
+      } else setModel('Unknown');
+    } catch (e) { setModel('Unknown'); }
   };
 
   const generateResponse = (chatbotIndex: number, prompt: string) => {
@@ -151,35 +181,22 @@ const ChatbotInstance = forwardRef<any, ChatbotInstanceProps>(({ id, name, port,
     const requestId = `req_${id}_${chatbotIndex}_${Date.now()}`;
     pendingRequests.current.set(requestId, chatbotIndex);
 
-    setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { ...cb, isGenerating: true } : cb));
-    const userMsgId = Date.now().toString() + chatbotIndex;
-    setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { 
-      ...cb, 
-      messages: [...cb.messages, { id: userMsgId, role: 'user', content: prompt }].slice(-5) 
-    } : cb));
+    // Update the Ref (Fast Path)
+    const cb = chatbotsRef.current[chatbotIndex];
+    cb.isGenerating = true;
+    cb.messages = [...cb.messages, { id: Date.now().toString(), role: 'user', content: prompt }].slice(-5);
 
-    sendMessage({
-      type: 'chat',
-      instanceId: id,
-      prompt,
-      requestId
-    });
+    sendMessage({ type: 'chat', instanceId: id, prompt, requestId });
   };
 
   const handleChatResponse = (chatbotIndex: number, response: any) => {
-    // CRITICAL: Logic must be synchronous to avoid queueing
     if (!autoRunRef.current) return;
 
+    const cb = chatbotsRef.current[chatbotIndex];
+    cb.isGenerating = false;
+
     if (response.error) {
-      setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { 
-        ...cb, 
-        isGenerating: false,
-        messages: [...cb.messages, { 
-          id: Date.now().toString(), 
-          role: 'assistant', 
-          content: `Error: ${response.error}` 
-        }].slice(-5)
-      } : cb));
+      cb.messages = [...cb.messages, { id: Date.now().toString(), role: 'assistant', content: `Error: ${response.error}` }].slice(-5);
       return;
     }
 
@@ -187,54 +204,37 @@ const ChatbotInstance = forwardRef<any, ChatbotInstanceProps>(({ id, name, port,
     const evalCount = data.tokens_predicted || 0;
     const tokensPerSecond = data.predicted_per_second || 0;
 
-    const assistantMsgId = (Date.now() + 1).toString() + chatbotIndex;
-    setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { 
-      ...cb, 
-      isGenerating: false,
-      messages: [...cb.messages, {
-        id: assistantMsgId,
-        role: 'assistant',
-        content: data.content,
-        metrics: {
-          evalCount,
-          evalDuration: (data.predicted_ms || 0) * 1e6,
-          tokensPerSecond,
-          totalDuration: ((data.predicted_ms || 0) + (data.prompt_ms || 0)) * 1e6
-        }
-      }].slice(-5),
+    cb.messages = [...cb.messages, {
+      id: Date.now().toString(),
+      role: 'assistant',
+      content: data.content,
       metrics: {
-        totalTokens: cb.metrics.totalTokens + evalCount,
-        requestsCompleted: cb.metrics.requestsCompleted + 1,
-        avgTokensPerSecond: cb.metrics.avgTokensPerSecond === 0 
-          ? tokensPerSecond 
-          : ((cb.metrics.avgTokensPerSecond * cb.metrics.requestsCompleted) + tokensPerSecond) / (cb.metrics.requestsCompleted + 1)
+        evalCount,
+        evalDuration: (data.predicted_ms || 0) * 1e6,
+        tokensPerSecond,
+        totalDuration: ((data.predicted_ms || 0) + (data.prompt_ms || 0)) * 1e6
       }
-    } : cb));
+    }].slice(-5);
 
-    // Trigger next prompt for this worker immediately
-    const currentIdx = chatbotsRef.current[chatbotIndex].currentPromptIndex;
+    cb.metrics = {
+      totalTokens: cb.metrics.totalTokens + evalCount,
+      requestsCompleted: cb.metrics.requestsCompleted + 1,
+      avgTokensPerSecond: cb.metrics.avgTokensPerSecond === 0 
+        ? tokensPerSecond 
+        : ((cb.metrics.avgTokensPerSecond * cb.metrics.requestsCompleted) + tokensPerSecond) / (cb.metrics.requestsCompleted + 1)
+    };
+
+    // Trigger next prompt immediately using queueMicrotask (Zero Latency)
+    const currentIdx = cb.currentPromptIndex;
     if (currentIdx + 1 < PROMPTS_PER_INSTANCE[id][chatbotIndex].length) {
-      setChatbots(prev => {
-        const next = prev.map((c, i) => i === chatbotIndex ? { ...c, currentPromptIndex: c.currentPromptIndex + 1 } : c);
-        
-        // Immediate next generation without waiting for React re-render cycle
-        const nextPrompt = PROMPTS_PER_INSTANCE[id][chatbotIndex][currentIdx + 1];
-        setTimeout(() => {
-          if (autoRunRef.current) {
-            generateResponse(chatbotIndex, nextPrompt);
-          }
-        }, 10);
-        
-        return next;
+      cb.currentPromptIndex++;
+      const nextPrompt = PROMPTS_PER_INSTANCE[id][chatbotIndex][cb.currentPromptIndex];
+      queueMicrotask(() => {
+        if (autoRunRef.current) generateResponse(chatbotIndex, nextPrompt);
       });
     } else {
-      // Check if all finished
-      const allFinished = chatbotsRef.current.every((c, i) => 
-        i === chatbotIndex ? (currentIdx + 1 >= PROMPTS_PER_INSTANCE[id][i].length) : (c.currentPromptIndex >= PROMPTS_PER_INSTANCE[id][i].length)
-      );
-      if (allFinished) {
-        setIsAutoRunning(false);
-      }
+      const allFinished = chatbotsRef.current.every(c => c.currentPromptIndex >= PROMPTS_PER_INSTANCE[id][c.id].length - 1);
+      if (allFinished) setIsAutoRunning(false);
     }
   };
 
@@ -366,22 +366,15 @@ export default function App() {
     if (totalTPS > peakTPS) setPeakTPS(totalTPS);
   }, [totalTPS, peakTPS]);
 
-  // Unified WebSocket connection
   useEffect(() => {
     const connect = () => {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const ws = new WebSocket(`${protocol}//${window.location.host}`);
-      
       ws.onopen = () => console.log('WebSocket Connected');
       ws.onmessage = (event) => {
         const msg = JSON.parse(event.data);
-        if (msg.type === 'stats') {
-          setCpuStats(prev => ({ ...prev, ...msg.data }));
-        } else {
-          // Bypassing React State for chat responses to avoid batching/throttling
-          // Using a native window event to ensure workers trigger immediately
-          window.dispatchEvent(new CustomEvent('llama_response', { detail: msg }));
-        }
+        if (msg.type === 'stats') setCpuStats(prev => ({ ...prev, ...msg.data }));
+        else window.dispatchEvent(new CustomEvent('llama_response', { detail: msg }));
       };
       ws.onclose = () => {
         console.log('WebSocket Disconnected. Retrying...');
@@ -389,7 +382,6 @@ export default function App() {
       };
       socketRef.current = ws;
     };
-
     connect();
     return () => socketRef.current?.close();
   }, []);
@@ -426,7 +418,6 @@ export default function App() {
       <div className="max-w-[1800px] w-full mx-auto flex flex-col flex-1">
         <header className="flex flex-col lg:flex-row items-center justify-between gap-6 bg-[#121214] border border-zinc-800/80 p-4 rounded-2xl mb-8 shadow-2xl relative overflow-hidden group">
           <div className="absolute inset-0 bg-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
-          
           <div className="flex items-center gap-6 shrink-0">
             <div className="relative shrink-0">
               <img src="/ampere-logo-dark.png" alt="Ampere Logo" className="h-8 w-auto object-contain" />
@@ -440,7 +431,6 @@ export default function App() {
               </p>
             </div>
           </div>
-
           <div className="flex flex-col items-center flex-1">
             <div className="text-[9px] text-zinc-600 font-black uppercase tracking-[0.4em] mb-3 opacity-50">
               High Density Enterprise Inference
@@ -467,7 +457,6 @@ export default function App() {
               </div>
             </div>
           </div>
-
           <div className="flex items-center gap-6 shrink-0">
             <div className="flex flex-col items-end">
               <div className="flex items-center gap-1.5 text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-1">
@@ -476,31 +465,20 @@ export default function App() {
               </div>
               <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-widest">Optimal</span>
             </div>
-            <button
-              onClick={handleToggleAll}
-              className={`flex items-center gap-3 px-8 py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-all shadow-lg active:scale-[0.96] ${
-                anyRunning 
-                  ? 'bg-red-950/20 text-red-500 border border-red-500/50 hover:bg-red-500 hover:text-white' 
-                  : 'bg-indigo-600 text-white hover:bg-indigo-500 hover:shadow-indigo-500/20'
-              }`}
-            >
+            <button onClick={handleToggleAll} className={`flex items-center gap-3 px-8 py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-all shadow-lg active:scale-[0.96] ${anyRunning ? 'bg-red-950/20 text-red-500 border border-red-500/50 hover:bg-red-500 hover:text-white' : 'bg-indigo-600 text-white hover:bg-indigo-500 hover:shadow-indigo-500/20'}`}>
               {anyRunning ? <Square size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
               <span>{anyRunning ? 'Stop' : 'Start'}</span>
             </button>
           </div>
         </header>
-
         <main className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 flex-1">
           <ChatbotInstance ref={instanceRefs[0]} id={1} name="Legal & Compliance Expert" port={8080} onRunningChange={(r) => handleRunningChange(0, r)} onTPSChange={(tps) => handleTPSChange(0, tps)} cpuUsage={cpuStats["1"] || 0} sendMessage={sendMessage} />
           <ChatbotInstance ref={instanceRefs[1]} id={2} name="Cybersecurity Expert" port={8081} onRunningChange={(r) => handleRunningChange(1, r)} onTPSChange={(tps) => handleTPSChange(1, tps)} cpuUsage={cpuStats["2"] || 0} sendMessage={sendMessage} />
           <ChatbotInstance ref={instanceRefs[2]} id={3} name="Fintech & Finance Expert" port={8082} onRunningChange={(r) => handleRunningChange(2, r)} onTPSChange={(tps) => handleTPSChange(2, tps)} cpuUsage={cpuStats["3"] || 0} sendMessage={sendMessage} />
           <ChatbotInstance ref={instanceRefs[3]} id={4} name="Supply Chain & Ops Expert" port={8083} onRunningChange={(r) => handleRunningChange(3, r)} onTPSChange={(tps) => handleTPSChange(3, tps)} cpuUsage={cpuStats["4"] || 0} sendMessage={sendMessage} />
         </main>
-
         <footer className="mt-12 border-t border-zinc-800/50 pt-8 flex items-center justify-between text-zinc-700">
-          <div className="text-[9px] uppercase tracking-[0.3em] font-bold">
-            © 2026 Ampere Computing LLC
-          </div>
+          <div className="text-[9px] uppercase tracking-[0.3em] font-bold">© 2026 Ampere Computing LLC</div>
           <div className="flex items-center gap-4">
             <span className="text-[9px] font-mono">Build v3.4.2-A1</span>
             <div className="h-3 w-px bg-zinc-800"></div>
