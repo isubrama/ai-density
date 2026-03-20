@@ -197,7 +197,13 @@ async function startServer() {
             ws.send(JSON.stringify({
               type: "chat_response",
               requestId,
-              data
+              data: {
+                content: data.content,
+                tokens_predicted: data.tokens_predicted,
+                predicted_per_second: data.timings?.predicted_per_second,
+                predicted_ms: data.timings?.predicted_ms,
+                prompt_ms: data.timings?.prompt_ms
+              }
             }));
           } catch (error: any) {
             ws.send(JSON.stringify({

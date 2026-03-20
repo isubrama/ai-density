@@ -24,10 +24,9 @@ interface ChatbotInstanceProps {
   onTPSChange?: (tps: number) => void;
   cpuUsage: number;
   sendMessage: (message: any) => void;
-  lastResponse: any;
 }
 
-const ChatbotInstance = forwardRef<any, ChatbotInstanceProps>(({ id, name, port, onRunningChange, onTPSChange, cpuUsage, sendMessage, lastResponse }, ref) => {
+const ChatbotInstance = forwardRef<any, ChatbotInstanceProps>(({ id, name, port, onRunningChange, onTPSChange, cpuUsage, sendMessage }, ref) => {
   const [isAutoRunning, setIsAutoRunning] = useState(false);
   const [status, setStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   const [model, setModel] = useState<string>('Loading...');
@@ -90,16 +89,22 @@ const ChatbotInstance = forwardRef<any, ChatbotInstanceProps>(({ id, name, port,
     return () => clearInterval(statusInterval);
   }, [id]);
 
-  // Handle incoming WebSocket responses
+  // Handle incoming WebSocket responses via Event Bus
   useEffect(() => {
-    if (lastResponse && lastResponse.type === 'chat_response') {
-      const chatbotIndex = pendingRequests.current.get(lastResponse.requestId);
-      if (chatbotIndex !== undefined) {
-        pendingRequests.current.delete(lastResponse.requestId);
-        handleChatResponse(chatbotIndex, lastResponse);
+    const handleLlamaResponse = (event: any) => {
+      const response = event.detail;
+      if (response.type === 'chat_response') {
+        const chatbotIndex = pendingRequests.current.get(response.requestId);
+        if (chatbotIndex !== undefined) {
+          pendingRequests.current.delete(response.requestId);
+          handleChatResponse(chatbotIndex, response);
+        }
       }
-    }
-  }, [lastResponse]);
+    };
+
+    window.addEventListener('llama_response', handleLlamaResponse);
+    return () => window.removeEventListener('llama_response', handleLlamaResponse);
+  }, []);
 
   const checkStatus = async () => {
     try {
@@ -162,6 +167,7 @@ const ChatbotInstance = forwardRef<any, ChatbotInstanceProps>(({ id, name, port,
   };
 
   const handleChatResponse = (chatbotIndex: number, response: any) => {
+    // CRITICAL: Logic must be synchronous to avoid queueing
     if (!autoRunRef.current) return;
 
     if (response.error) {
@@ -179,7 +185,7 @@ const ChatbotInstance = forwardRef<any, ChatbotInstanceProps>(({ id, name, port,
 
     const data = response.data;
     const evalCount = data.tokens_predicted || 0;
-    const tokensPerSecond = data.timings?.predicted_per_second || 0;
+    const tokensPerSecond = data.predicted_per_second || 0;
 
     const assistantMsgId = (Date.now() + 1).toString() + chatbotIndex;
     setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { 
@@ -191,9 +197,9 @@ const ChatbotInstance = forwardRef<any, ChatbotInstanceProps>(({ id, name, port,
         content: data.content,
         metrics: {
           evalCount,
-          evalDuration: (data.timings?.predicted_ms || 0) * 1e6,
+          evalDuration: (data.predicted_ms || 0) * 1e6,
           tokensPerSecond,
-          totalDuration: ((data.timings?.predicted_ms || 0) + (data.timings?.prompt_ms || 0)) * 1e6
+          totalDuration: ((data.predicted_ms || 0) + (data.prompt_ms || 0)) * 1e6
         }
       }].slice(-5),
       metrics: {
@@ -205,16 +211,22 @@ const ChatbotInstance = forwardRef<any, ChatbotInstanceProps>(({ id, name, port,
       }
     } : cb));
 
-    // Trigger next prompt for this worker
+    // Trigger next prompt for this worker immediately
     const currentIdx = chatbotsRef.current[chatbotIndex].currentPromptIndex;
     if (currentIdx + 1 < PROMPTS_PER_INSTANCE[id][chatbotIndex].length) {
-      setChatbots(prev => prev.map((c, i) => i === chatbotIndex ? { ...c, currentPromptIndex: c.currentPromptIndex + 1 } : c));
-      setTimeout(() => {
-        if (autoRunRef.current) {
-          const nextPrompt = PROMPTS_PER_INSTANCE[id][chatbotIndex][currentIdx + 1];
-          generateResponse(chatbotIndex, nextPrompt);
-        }
-      }, 10);
+      setChatbots(prev => {
+        const next = prev.map((c, i) => i === chatbotIndex ? { ...c, currentPromptIndex: c.currentPromptIndex + 1 } : c);
+        
+        // Immediate next generation without waiting for React re-render cycle
+        const nextPrompt = PROMPTS_PER_INSTANCE[id][chatbotIndex][currentIdx + 1];
+        setTimeout(() => {
+          if (autoRunRef.current) {
+            generateResponse(chatbotIndex, nextPrompt);
+          }
+        }, 10);
+        
+        return next;
+      });
     } else {
       // Check if all finished
       const allFinished = chatbotsRef.current.every((c, i) => 
@@ -345,7 +357,6 @@ export default function App() {
   const [tpsStates, setTpsStates] = useState([0, 0, 0, 0]);
   const [peakTPS, setPeakTPS] = useState(0);
   const [cpuStats, setCpuStats] = useState<Record<string, number>>({});
-  const [lastResponse, setLastResponse] = useState<any>(null);
   const socketRef = useRef<WebSocket | null>(null);
   
   const anyRunning = runningStates.some(r => r);
@@ -366,8 +377,10 @@ export default function App() {
         const msg = JSON.parse(event.data);
         if (msg.type === 'stats') {
           setCpuStats(prev => ({ ...prev, ...msg.data }));
-        } else if (msg.type === 'chat_response') {
-          setLastResponse(msg);
+        } else {
+          // Bypassing React State for chat responses to avoid batching/throttling
+          // Using a native window event to ensure workers trigger immediately
+          window.dispatchEvent(new CustomEvent('llama_response', { detail: msg }));
         }
       };
       ws.onclose = () => {
@@ -478,10 +491,10 @@ export default function App() {
         </header>
 
         <main className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 flex-1">
-          <ChatbotInstance ref={instanceRefs[0]} id={1} name="Legal & Compliance Expert" port={8080} onRunningChange={(r) => handleRunningChange(0, r)} onTPSChange={(tps) => handleTPSChange(0, tps)} cpuUsage={cpuStats["1"] || 0} sendMessage={sendMessage} lastResponse={lastResponse} />
-          <ChatbotInstance ref={instanceRefs[1]} id={2} name="Cybersecurity Expert" port={8081} onRunningChange={(r) => handleRunningChange(1, r)} onTPSChange={(tps) => handleTPSChange(1, tps)} cpuUsage={cpuStats["2"] || 0} sendMessage={sendMessage} lastResponse={lastResponse} />
-          <ChatbotInstance ref={instanceRefs[2]} id={3} name="Fintech & Finance Expert" port={8082} onRunningChange={(r) => handleRunningChange(2, r)} onTPSChange={(tps) => handleTPSChange(2, tps)} cpuUsage={cpuStats["3"] || 0} sendMessage={sendMessage} lastResponse={lastResponse} />
-          <ChatbotInstance ref={instanceRefs[3]} id={4} name="Supply Chain & Ops Expert" port={8083} onRunningChange={(r) => handleRunningChange(3, r)} onTPSChange={(tps) => handleTPSChange(3, tps)} cpuUsage={cpuStats["4"] || 0} sendMessage={sendMessage} lastResponse={lastResponse} />
+          <ChatbotInstance ref={instanceRefs[0]} id={1} name="Legal & Compliance Expert" port={8080} onRunningChange={(r) => handleRunningChange(0, r)} onTPSChange={(tps) => handleTPSChange(0, tps)} cpuUsage={cpuStats["1"] || 0} sendMessage={sendMessage} />
+          <ChatbotInstance ref={instanceRefs[1]} id={2} name="Cybersecurity Expert" port={8081} onRunningChange={(r) => handleRunningChange(1, r)} onTPSChange={(tps) => handleTPSChange(1, tps)} cpuUsage={cpuStats["2"] || 0} sendMessage={sendMessage} />
+          <ChatbotInstance ref={instanceRefs[2]} id={3} name="Fintech & Finance Expert" port={8082} onRunningChange={(r) => handleRunningChange(2, r)} onTPSChange={(tps) => handleTPSChange(2, tps)} cpuUsage={cpuStats["3"] || 0} sendMessage={sendMessage} />
+          <ChatbotInstance ref={instanceRefs[3]} id={4} name="Supply Chain & Ops Expert" port={8083} onRunningChange={(r) => handleRunningChange(3, r)} onTPSChange={(tps) => handleTPSChange(3, tps)} cpuUsage={cpuStats["4"] || 0} sendMessage={sendMessage} />
         </main>
 
         <footer className="mt-12 border-t border-zinc-800/50 pt-8 flex items-center justify-between text-zinc-700">
