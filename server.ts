@@ -4,13 +4,9 @@ import path from "path";
 import fs from "fs";
 import http from "http";
 import { fileURLToPath } from "url";
-import { EventEmitter } from "events";
+import { WebSocketServer, WebSocket } from "ws";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// Event emitter for stats updates
-const statsEmitter = new EventEmitter();
-statsEmitter.setMaxListeners(100);
 
 // Load prompts from src/prompts.json
 const promptsPath = path.resolve(__dirname, "src/prompts.json");
@@ -84,21 +80,36 @@ function getContainerCgroupUsage(id: string, i: number): bigint {
   }
 }
 
+// Global list of connected WS clients
+const wsClients = new Set<WebSocket>();
+
+// Function to broadcast message to all connected clients
+function broadcast(message: any) {
+  const payload = JSON.stringify(message);
+  for (const client of wsClients) {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(payload);
+    }
+  }
+}
+
 // Function to update stats for all containers in parallel
 async function updateCpuStats() {
   const now = process.hrtime.bigint();
+  const stats: Record<string, number> = {};
+  
   const promises = [1, 2, 3, 4].map(async (i) => {
     try {
       let id = containerIdCache[i.toString()];
       if (!id) {
         // First time, resolve name to ID via Docker API
-        let stats;
+        let containerStats;
         try {
-          stats = await getContainerStats(`ai-density-llama-cpp-${i}-1`);
+          containerStats = await getContainerStats(`ai-density-llama-cpp-${i}-1`);
         } catch (e) {
-          stats = await getContainerStats(`llama-cpp-${i}`);
+          containerStats = await getContainerStats(`llama-cpp-${i}`);
         }
-        id = stats.id;
+        id = containerStats.id;
         containerIdCache[i.toString()] = id;
       }
 
@@ -115,70 +126,100 @@ async function updateCpuStats() {
           const instancePercent = hostPercent / 32.0;
           const newVal = Math.min(Math.round(instancePercent), 100);
           
-          const oldVal = cpuUsageCache[i.toString()];
-          if (oldVal !== newVal) {
-            console.log(`[DEBUG] CPU Usage for llama-cpp-${i} changed: ${oldVal}% -> ${newVal}%`);
-          }
           cpuUsageCache[i.toString()] = newVal;
-          statsEmitter.emit("statsUpdate", { id: i.toString(), cpu_usage: newVal });
+          stats[i.toString()] = newVal;
         }
       }
       prevCpuStats[i.toString()] = { containerUsage: usage, time: now };
     } catch (error) {
       cpuUsageCache[i.toString()] = 0;
-      statsEmitter.emit("statsUpdate", { id: i.toString(), cpu_usage: 0 });
-      // Reset caches on error to allow recovery if container restarts
+      stats[i.toString()] = 0;
       delete containerIdCache[i.toString()];
       delete cgroupPathCache[i.toString()];
     }
   });
 
   await Promise.all(promises);
+  
+  if (Object.keys(stats).length > 0) {
+    broadcast({ type: "stats", data: stats });
+  }
 }
 
 // Background task to poll CPU stats
 async function pollCpuStats() {
-  // Initial update
   await updateCpuStats();
-  
-  // Schedule periodic updates
   setInterval(async () => {
     await updateCpuStats();
-  }, 2000); // Poll every 2 seconds
+  }, 2000); 
 }
+
+const getLlamaUrl = (id: string) => {
+  const envVar = `LLAMA_API_URL_${id}`;
+  return process.env[envVar] || `http://localhost:808${parseInt(id) - 1}`;
+};
 
 async function startServer() {
   const app = express();
+  const server = http.createServer(app);
+  const wss = new WebSocketServer({ server });
   const PORT = 3000;
 
   app.use(express.json());
 
-  // SSE Endpoint for stats
-  app.get("/api/stats/stream", (req, res) => {
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.flushHeaders();
+  wss.on("connection", (ws) => {
+    wsClients.add(ws);
+    console.log(`[WS] Client connected. Total clients: ${wsClients.size}`);
+    
+    // Send initial stats on connection
+    ws.send(JSON.stringify({ type: "stats", data: cpuUsageCache }));
 
-    const onUpdate = (data: any) => {
-      res.write(`data: ${JSON.stringify(data)}\n\n`);
-    };
+    ws.on("message", async (message) => {
+      try {
+        const payload = JSON.parse(message.toString());
+        
+        if (payload.type === "chat") {
+          const { instanceId, prompt, requestId } = payload;
+          const url = getLlamaUrl(instanceId);
+          const systemMessage = SYSTEM_PROMPTS[instanceId] || "You are a helpful assistant.";
+          
+          try {
+            const response = await fetch(`${url}/completion`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                prompt: `<|im_start|>system\n${systemMessage}<|im_end|>\n<|im_start|>user\n${prompt}<|im_end|>\n<|im_start|>assistant\n`,
+                n_predict: 256,
+                stream: false
+              })
+            });
+            const data = await response.json();
+            ws.send(JSON.stringify({
+              type: "chat_response",
+              requestId,
+              data
+            }));
+          } catch (error: any) {
+            ws.send(JSON.stringify({
+              type: "chat_response",
+              requestId,
+              error: error.message
+            }));
+          }
+        }
+      } catch (e) {
+        console.error("[WS] Error processing message:", e);
+      }
+    });
 
-    statsEmitter.on("statsUpdate", onUpdate);
-
-    req.on("close", () => {
-      statsEmitter.off("statsUpdate", onUpdate);
+    ws.on("close", () => {
+      wsClients.delete(ws);
+      console.log(`[WS] Client disconnected. Total clients: ${wsClients.size}`);
     });
   });
 
   console.log("Server starting...");
-  // Start polling immediately
   pollCpuStats().catch(err => console.error("CPU polling failed:", err));
-
-  const getLlamaUrl = (id: string) => {
-    const envVar = `LLAMA_API_URL_${id}`;
-    return process.env[envVar] || `http://localhost:808${parseInt(id) - 1}`;
-  };
 
   app.get("/api/models/:id", async (req, res) => {
     try {
@@ -214,27 +255,6 @@ async function startServer() {
     }
   });
 
-  app.post("/api/chat/:id", async (req, res) => {
-    try {
-      const url = getLlamaUrl(req.params.id);
-      const { prompt } = req.body;
-      const systemMessage = SYSTEM_PROMPTS[req.params.id] || "You are a helpful assistant.";
-      const response = await fetch(`${url}/completion`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: `<|im_start|>system\n${systemMessage}<|im_end|>\n<|im_start|>user\n${prompt}<|im_end|>\n<|im_start|>assistant\n`,
-          n_predict: 256,
-          stream: false
-        })
-      });
-      const data = await response.json();
-      res.json(data);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
@@ -243,7 +263,7 @@ async function startServer() {
     app.get("*", (req, res) => res.sendFile(path.resolve(__dirname, "dist", "index.html")));
   }
 
-  app.listen(PORT, "0.0.0.0", () => console.log(`Server running on http://localhost:${PORT}`));
+  server.listen(PORT, "0.0.0.0", () => console.log(`Server running on http://localhost:${PORT}`));
 }
 
 startServer();

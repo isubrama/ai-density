@@ -16,11 +16,21 @@ interface Message {
   };
 }
 
-const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number, onRunningChange?: (running: boolean) => void, onTPSChange?: (tps: number) => void }>(({ id, name, port, onRunningChange, onTPSChange }, ref) => {
+interface ChatbotInstanceProps {
+  id: number;
+  name: string;
+  port: number;
+  onRunningChange?: (running: boolean) => void;
+  onTPSChange?: (tps: number) => void;
+  cpuUsage: number;
+  sendMessage: (message: any) => void;
+  lastResponse: any;
+}
+
+const ChatbotInstance = forwardRef<any, ChatbotInstanceProps>(({ id, name, port, onRunningChange, onTPSChange, cpuUsage, sendMessage, lastResponse }, ref) => {
   const [isAutoRunning, setIsAutoRunning] = useState(false);
   const [status, setStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   const [model, setModel] = useState<string>('Loading...');
-  const [cpuUsage, setCpuUsage] = useState(0);
   
   const [chatbots, setChatbots] = useState(Array.from({ length: 5 }, (_, i) => ({
     id: i,
@@ -41,19 +51,19 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
     onRunningChange?.(isAutoRunning);
   }, [isAutoRunning, onRunningChange]);
 
-  const abortControllerRef = useRef<AbortController | null>(null);
+  // Track pending requests for this instance to handle responses
+  const pendingRequests = useRef<Map<string, number>>(new Map());
 
   useImperativeHandle(ref, () => ({
     start: () => {
       if (status === 'online' && !isAutoRunning) {
-        abortControllerRef.current = new AbortController();
         setChatbots(prev => prev.map(cb => ({ ...cb, currentPromptIndex: 0, messages: [], isGenerating: false })));
         setIsAutoRunning(true);
       }
     },
     stop: () => {
       setIsAutoRunning(false);
-      abortControllerRef.current?.abort();
+      pendingRequests.current.clear();
     },
     isAutoRunning,
     status
@@ -76,42 +86,28 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
   useEffect(() => {
     checkStatus();
     fetchModel();
-    
-    // Status polling still needed for online/offline check
     const statusInterval = setInterval(checkStatus, 5000);
-
-    // SSE for CPU usage updates (Push Architecture)
-    const eventSource = new EventSource('/api/stats/stream');
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.id === id.toString()) {
-          setCpuUsage(data.cpu_usage);
-        }
-      } catch (e) {
-        console.error("Failed to parse SSE data", e);
-      }
-    };
-
-    return () => {
-      clearInterval(statusInterval);
-      eventSource.close();
-    };
+    return () => clearInterval(statusInterval);
   }, [id]);
+
+  // Handle incoming WebSocket responses
+  useEffect(() => {
+    if (lastResponse && lastResponse.type === 'chat_response') {
+      const chatbotIndex = pendingRequests.current.get(lastResponse.requestId);
+      if (chatbotIndex !== undefined) {
+        pendingRequests.current.delete(lastResponse.requestId);
+        handleChatResponse(chatbotIndex, lastResponse);
+      }
+    }
+  }, [lastResponse]);
 
   const checkStatus = async () => {
     try {
       const res = await fetch(`/api/status/${id}`);
       const data = await res.json();
       setStatus(data.status);
-      // setCpuUsage is now primarily handled by SSE, 
-      // but we update it here once on mount/check for consistency
-      if (data.cpu_usage !== undefined) {
-        setCpuUsage(data.cpu_usage);
-      }
     } catch (e) {
       setStatus('offline');
-      setCpuUsage(0);
     }
   };
 
@@ -144,9 +140,12 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
     }
   };
 
-  const generateResponse = async (chatbotIndex: number, prompt: string) => {
+  const generateResponse = (chatbotIndex: number, prompt: string) => {
     if (!autoRunRef.current) return;
     
+    const requestId = `req_${id}_${chatbotIndex}_${Date.now()}`;
+    pendingRequests.current.set(requestId, chatbotIndex);
+
     setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { ...cb, isGenerating: true } : cb));
     const userMsgId = Date.now().toString() + chatbotIndex;
     setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { 
@@ -154,99 +153,87 @@ const ChatbotInstance = forwardRef<any, { id: number, name: string, port: number
       messages: [...cb.messages, { id: userMsgId, role: 'user', content: prompt }].slice(-5) 
     } : cb));
 
-    try {
-      const res = await fetch(`/api/chat/${id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
-        signal: abortControllerRef.current?.signal
-      });
+    sendMessage({
+      type: 'chat',
+      instanceId: id,
+      prompt,
+      requestId
+    });
+  };
 
-      if (!res.ok) throw new Error('Failed to generate');
-      
-      const data = await res.json();
-      
-      if (!autoRunRef.current) return;
+  const handleChatResponse = (chatbotIndex: number, response: any) => {
+    if (!autoRunRef.current) return;
 
-      const evalCount = data.tokens_predicted || 0;
-      const tokensPerSecond = data.timings?.predicted_per_second || 0;
-
-      const assistantMsgId = (Date.now() + 1).toString() + chatbotIndex;
+    if (response.error) {
       setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { 
         ...cb, 
-        messages: [...cb.messages, {
-          id: assistantMsgId,
-          role: 'assistant',
-          content: data.content,
-          metrics: {
-            evalCount,
-            evalDuration: (data.timings?.predicted_ms || 0) * 1e6,
-            tokensPerSecond,
-            totalDuration: ((data.timings?.predicted_ms || 0) + (data.timings?.prompt_ms || 0)) * 1e6
-          }
-        }].slice(-5),
-        metrics: {
-          totalTokens: cb.metrics.totalTokens + evalCount,
-          requestsCompleted: cb.metrics.requestsCompleted + 1,
-          avgTokensPerSecond: cb.metrics.avgTokensPerSecond === 0 
-            ? tokensPerSecond 
-            : ((cb.metrics.avgTokensPerSecond * cb.metrics.requestsCompleted) + tokensPerSecond) / (cb.metrics.requestsCompleted + 1)
-        }
-      } : cb));
-
-    } catch (error: any) {
-      if (error.name === 'AbortError') return;
-      console.error(error);
-      setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { 
-        ...cb, 
+        isGenerating: false,
         messages: [...cb.messages, { 
           id: Date.now().toString(), 
           role: 'assistant', 
-          content: `Error connecting to llama.cpp instance ${id}.` 
+          content: `Error: ${response.error}` 
         }].slice(-5)
       } : cb));
-    } finally {
-      setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { ...cb, isGenerating: false } : cb));
+      return;
     }
-  };
 
-  const runWorker = async (workerIndex: number) => {
-    // Independent loop for each worker to eliminate "bursting" and keep CPU busy
-    while (autoRunRef.current) {
-      const cb = chatbotsRef.current[workerIndex];
-      const chatbotPrompts = PROMPTS_PER_INSTANCE[id][workerIndex];
-      
-      if (cb.currentPromptIndex >= chatbotPrompts.length) break;
-      
-      const prompt = chatbotPrompts[cb.currentPromptIndex];
-      await generateResponse(workerIndex, prompt);
-      
-      if (!autoRunRef.current) break;
+    const data = response.data;
+    const evalCount = data.tokens_predicted || 0;
+    const tokensPerSecond = data.timings?.predicted_per_second || 0;
 
-      // Update index for this specific worker immediately
-      setChatbots(prev => {
-        const next = prev.map((c, i) => i === workerIndex ? { ...c, currentPromptIndex: c.currentPromptIndex + 1 } : c);
-        
-        // If this was the last prompt for ALL workers in this instance, stop the auto-run
-        const allFinished = next.every(c => c.currentPromptIndex >= PROMPTS_PER_INSTANCE[id][c.id].length);
-        if (allFinished) {
-          setIsAutoRunning(false);
+    const assistantMsgId = (Date.now() + 1).toString() + chatbotIndex;
+    setChatbots(prev => prev.map((cb, i) => i === chatbotIndex ? { 
+      ...cb, 
+      isGenerating: false,
+      messages: [...cb.messages, {
+        id: assistantMsgId,
+        role: 'assistant',
+        content: data.content,
+        metrics: {
+          evalCount,
+          evalDuration: (data.timings?.predicted_ms || 0) * 1e6,
+          tokensPerSecond,
+          totalDuration: ((data.timings?.predicted_ms || 0) + (data.timings?.prompt_ms || 0)) * 1e6
         }
-        return next;
-      });
+      }].slice(-5),
+      metrics: {
+        totalTokens: cb.metrics.totalTokens + evalCount,
+        requestsCompleted: cb.metrics.requestsCompleted + 1,
+        avgTokensPerSecond: cb.metrics.avgTokensPerSecond === 0 
+          ? tokensPerSecond 
+          : ((cb.metrics.avgTokensPerSecond * cb.metrics.requestsCompleted) + tokensPerSecond) / (cb.metrics.requestsCompleted + 1)
+      }
+    } : cb));
 
-      // No artificial delay (like setTimeout 100ms) to ensure maximum CPU throughput
-      // Tiny yield to event loop to keep UI responsive
-      await new Promise(resolve => setTimeout(resolve, 10));
+    // Trigger next prompt for this worker
+    const currentIdx = chatbotsRef.current[chatbotIndex].currentPromptIndex;
+    if (currentIdx + 1 < PROMPTS_PER_INSTANCE[id][chatbotIndex].length) {
+      setChatbots(prev => prev.map((c, i) => i === chatbotIndex ? { ...c, currentPromptIndex: c.currentPromptIndex + 1 } : c));
+      setTimeout(() => {
+        if (autoRunRef.current) {
+          const nextPrompt = PROMPTS_PER_INSTANCE[id][chatbotIndex][currentIdx + 1];
+          generateResponse(chatbotIndex, nextPrompt);
+        }
+      }, 10);
+    } else {
+      // Check if all finished
+      const allFinished = chatbotsRef.current.every((c, i) => 
+        i === chatbotIndex ? (currentIdx + 1 >= PROMPTS_PER_INSTANCE[id][i].length) : (c.currentPromptIndex >= PROMPTS_PER_INSTANCE[id][i].length)
+      );
+      if (allFinished) {
+        setIsAutoRunning(false);
+      }
     }
   };
 
   useEffect(() => {
     if (isAutoRunning) {
-      // Launch all workers independently rather than in a synchronized batch
-      [0, 1, 2, 3, 4].forEach(index => runWorker(index));
+      [0, 1, 2, 3, 4].forEach(index => {
+        const prompt = PROMPTS_PER_INSTANCE[id][index][0];
+        generateResponse(index, prompt);
+      });
     }
-  }, [isAutoRunning, id]);
+  }, [isAutoRunning]);
 
   const getInstanceIcon = () => {
     if (name.includes('Legal')) return <Scale size={18} className="text-indigo-400" />;
@@ -357,6 +344,9 @@ export default function App() {
   const [runningStates, setRunningStates] = useState([false, false, false, false]);
   const [tpsStates, setTpsStates] = useState([0, 0, 0, 0]);
   const [peakTPS, setPeakTPS] = useState(0);
+  const [cpuStats, setCpuStats] = useState<Record<string, number>>({});
+  const [lastResponse, setLastResponse] = useState<any>(null);
+  const socketRef = useRef<WebSocket | null>(null);
   
   const anyRunning = runningStates.some(r => r);
   const totalTPS = tpsStates.reduce((acc, tps) => acc + tps, 0);
@@ -364,6 +354,38 @@ export default function App() {
   useEffect(() => {
     if (totalTPS > peakTPS) setPeakTPS(totalTPS);
   }, [totalTPS, peakTPS]);
+
+  // Unified WebSocket connection
+  useEffect(() => {
+    const connect = () => {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(`${protocol}//${window.location.host}`);
+      
+      ws.onopen = () => console.log('WebSocket Connected');
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'stats') {
+          setCpuStats(prev => ({ ...prev, ...msg.data }));
+        } else if (msg.type === 'chat_response') {
+          setLastResponse(msg);
+        }
+      };
+      ws.onclose = () => {
+        console.log('WebSocket Disconnected. Retrying...');
+        setTimeout(connect, 2000);
+      };
+      socketRef.current = ws;
+    };
+
+    connect();
+    return () => socketRef.current?.close();
+  }, []);
+
+  const sendMessage = (message: any) => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify(message));
+    }
+  };
 
   const handleRunningChange = (index: number, running: boolean) => {
     setRunningStates(prev => {
@@ -389,11 +411,9 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100 font-sans p-4 md:p-6 selection:bg-indigo-500/30 flex flex-col">
       <div className="max-w-[1800px] w-full mx-auto flex flex-col flex-1">
-        {/* Compact Unified Header Strip */}
         <header className="flex flex-col lg:flex-row items-center justify-between gap-6 bg-[#121214] border border-zinc-800/80 p-4 rounded-2xl mb-8 shadow-2xl relative overflow-hidden group">
           <div className="absolute inset-0 bg-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
           
-          {/* Brand Left */}
           <div className="flex items-center gap-6 shrink-0">
             <div className="relative shrink-0">
               <img src="/ampere-logo-dark.png" alt="Ampere Logo" className="h-8 w-auto object-contain" />
@@ -408,7 +428,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Metrics Center */}
           <div className="flex flex-col items-center flex-1">
             <div className="text-[9px] text-zinc-600 font-black uppercase tracking-[0.4em] mb-3 opacity-50">
               High Density Enterprise Inference
@@ -436,7 +455,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Controls Right */}
           <div className="flex items-center gap-6 shrink-0">
             <div className="flex flex-col items-end">
               <div className="flex items-center gap-1.5 text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-1">
@@ -460,10 +478,10 @@ export default function App() {
         </header>
 
         <main className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 flex-1">
-          <ChatbotInstance ref={instanceRefs[0]} id={1} name="Legal & Compliance Expert" port={8080} onRunningChange={(r) => handleRunningChange(0, r)} onTPSChange={(tps) => handleTPSChange(0, tps)} />
-          <ChatbotInstance ref={instanceRefs[1]} id={2} name="Cybersecurity Expert" port={8081} onRunningChange={(r) => handleRunningChange(1, r)} onTPSChange={(tps) => handleTPSChange(1, tps)} />
-          <ChatbotInstance ref={instanceRefs[2]} id={3} name="Fintech & Finance Expert" port={8082} onRunningChange={(r) => handleRunningChange(2, r)} onTPSChange={(tps) => handleTPSChange(2, tps)} />
-          <ChatbotInstance ref={instanceRefs[3]} id={4} name="Supply Chain & Ops Expert" port={8083} onRunningChange={(r) => handleRunningChange(3, r)} onTPSChange={(tps) => handleTPSChange(3, tps)} />
+          <ChatbotInstance ref={instanceRefs[0]} id={1} name="Legal & Compliance Expert" port={8080} onRunningChange={(r) => handleRunningChange(0, r)} onTPSChange={(tps) => handleTPSChange(0, tps)} cpuUsage={cpuStats["1"] || 0} sendMessage={sendMessage} lastResponse={lastResponse} />
+          <ChatbotInstance ref={instanceRefs[1]} id={2} name="Cybersecurity Expert" port={8081} onRunningChange={(r) => handleRunningChange(1, r)} onTPSChange={(tps) => handleTPSChange(1, tps)} cpuUsage={cpuStats["2"] || 0} sendMessage={sendMessage} lastResponse={lastResponse} />
+          <ChatbotInstance ref={instanceRefs[2]} id={3} name="Fintech & Finance Expert" port={8082} onRunningChange={(r) => handleRunningChange(2, r)} onTPSChange={(tps) => handleTPSChange(2, tps)} cpuUsage={cpuStats["3"] || 0} sendMessage={sendMessage} lastResponse={lastResponse} />
+          <ChatbotInstance ref={instanceRefs[3]} id={4} name="Supply Chain & Ops Expert" port={8083} onRunningChange={(r) => handleRunningChange(3, r)} onTPSChange={(tps) => handleTPSChange(3, tps)} cpuUsage={cpuStats["4"] || 0} sendMessage={sendMessage} lastResponse={lastResponse} />
         </main>
 
         <footer className="mt-12 border-t border-zinc-800/50 pt-8 flex items-center justify-between text-zinc-700">
